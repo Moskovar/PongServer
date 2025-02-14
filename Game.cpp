@@ -34,7 +34,8 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 
     std::cout << "Game created with ID: " << gameID << std::endl;
 
-    game_created_time = uti::getCurrentTimestamp();
+    game_created_time   = uti::getCurrentTimestamp();
+    round_start_time    = uti::getCurrentTimestamp();
 }
 
 Game::~Game()
@@ -52,6 +53,12 @@ Player* Game::getOtherPlayer(short id)
     else					return p2;
 }
 
+void Game::resetBall()
+{
+    ball.reset();
+    sendBallToPlayers();
+}
+
 void Game::sendBallToPlayers()
 {
     uti::NetworkBall nball = ball.getNball();
@@ -59,51 +66,58 @@ void Game::sendBallToPlayers()
     p2->sendNBALLTCP(nball);
 }
 
+void Game::startRound()
+{
+    ball.start((lastWinner) ? -lastWinner->getSide() : 0);
+
+    roundStarted = true;
+    round_start_time = uti::getCurrentTimestamp();
+    sendBallToPlayers();
+}
+
+void Game::resetRound()
+{
+    resetBall();
+    roundStarted = false;
+    round_start_time = uti::getCurrentTimestamp();
+}
+
 void Game::run(SOCKET& udpSocket, float deltaTime)
 {
-    //mtx.lock();
-
-    //if (!p1 || !p2)
-    //{
-    //    mtx.unlock();
-    //    return;
-    //}
-
-    //if (p1) std::cout << "P1 PAS NULLPTR" << std::endl;
-    //if (p2) std::cout << "P2 PAS NULLPTR" << std::endl;
-
-    //std::cout << distanceBetweenHitboxes(&ball, p1->getPaddle()) << std::endl;
-    //std::cout << ball.getX() << " : " << ball.getZ() << std::endl;
-
-    float distance = 10.0f;
+    float distance;
     Element* element = nullptr;
     short isPaddle = true;//pour vérifier le type d'Element, plus rapide qu'un dynamic cast ?
 
-    if      (ball.velocityX < 0 && p1) element = p1->getPaddle();
-    else if (ball.velocityX > 0 && p2) element = p2->getPaddle();
-
-    if (!element)
+    if (ball.velocityX < 0 && p1)
     {
-        std::cout << "element nullptr" << std::endl;
-        return;
+        element = p1->getPaddle();
+
+        if (!element) return;
+
+        if (ball.getX() < element->getX() - 10)
+        {
+            std::cout << "OUT!" << std::endl;
+            resetRound();
+            lastWinner = p2;
+        }
     }
+    else if (ball.velocityX > 0 && p2)
+    {
+        element = p2->getPaddle();
 
-    //std::cout << "P1: " << p1->getPaddle()->getX() << std::endl;
-    //std::cout << "P2: " << p2->getPaddle()->getX() << std::endl;
+        if (!element) return;
 
-    //mtx.unlock();
-
-    //
-    //if (!element) 
-    //{
-    //    std::cout << "ELEMENT NULLPTR, SORTIE" << std::endl;
-    //    //mtx.unlock();
-    //    return;
-    //}
+        if (ball.getX() > element->getX() + 10)
+        {
+            std::cout << "OUT!" << std::endl;
+            resetRound();
+            lastWinner = p1;
+        }
+    }
+    else return;
 
     distance = distanceBetweenHitboxes(&ball, element);
 
-    //std::cout << distanceBetweenHitboxes(&ball, &(*walls)[0]) << std::endl;
 
     //Si la distance avec le joueur est > 0, alors on vérifie la distance avec les murs
     if (distance > 0)
@@ -138,10 +152,6 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             //--- VelocityZ ---//
             float velocityZ = (ball.getZ() - element->getZ()) / (static_cast<Paddle*>(element)->width / 2);
 
-            //if (paddle->getSide() == 1) velocityZ *= -1;
-
-            //std::cout << ball->getPosition().z - p->getPaddle()->getPosition().z << std::endl;
-            //std::cout << velocityZ << std::endl;
 
             ball.velocityZ = velocityZ;
         }
@@ -151,9 +161,6 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         }
 
         //--- Send data ---//
-        //p1->send_NBUDP(udpSocket, &ball);
-        //p2->send_NBUDP(udpSocket, &ball);
-
         uti::NetworkBall nb = ball.getNball();
         p1->sendNBALLTCP(nb);
         p2->sendNBALLTCP(nb);

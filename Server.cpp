@@ -463,15 +463,13 @@ void Server::run_games()
                 //std::cout << "P1 CONNECTED: " << it->second->getP1()->connected << std::endl;
                 //std::cout << "P2 CONNECTED: " << it->second->getP2()->connected << std::endl;
 
-                if (it->second->gameStarted)//Si la game a démarré, on la joue
+                if (it->second->roundStarted)//Si la game a démarré, on la joue
                 {
                     it->second->run(udpSocket, deltaTime.count());
                 }
-                else if (!it->second->gameStarted && uti::getCurrentTimestamp() - it->second->game_created_time >= 3)//si la game n'a pas démarré
+                else if (!it->second->roundStarted && uti::getCurrentTimestamp() - it->second->round_start_time >= 3)//si la game n'a pas démarré
                 {
-                    it->second->gameStarted = true;
-                    it->second->game_start_time = uti::getCurrentTimestamp();
-                    it->second->sendBallToPlayers();
+                    it->second->startRound();
                 }
                 
             }

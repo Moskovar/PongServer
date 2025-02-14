@@ -16,16 +16,19 @@ class Game
 		bool isFinished() { return !p1->connected && !p2->connected; }
 		bool allPlayersDisconnected() { return !p1->connected && !p2->connected; }
 
+		void resetBall();
 		void sendBallToPlayers();
+		void startRound();
+		void resetRound();
 		void run(SOCKET& udpSocket, float deltaTime);
 
 		std::mutex mtx;
-		u_int64 game_created_time = 0, game_start_time = 0;
-		bool gameStarted = false;
+		u_int64 game_created_time = 0, round_start_time = 0;
+		bool roundStarted = false;
 
 	private:
 		unsigned short gameID = 0, id = 0;
-		Player* p1 = nullptr, * p2 = nullptr;
+		Player* p1 = nullptr, * p2 = nullptr, * lastWinner = nullptr;
 		Ball ball;
 		std::vector<Wall>* walls = nullptr;
 
