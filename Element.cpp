@@ -25,6 +25,14 @@ void Element::updateModelMatrixFromPosition()
 	calculateHitBox();
 }
 
+void Element::setMinMaxPoints(glm::vec3 minPoint, glm::vec3 maxPoint)
+{
+	this->minPoint = minPoint;
+	this->maxPoint = maxPoint;
+
+	calculateHitBox();
+}
+
 void Element::calculateHitBox()
 {
 	// Mettre à jour le centre de l'OBB

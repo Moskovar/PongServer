@@ -25,16 +25,16 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     p2->sendNPSTCP(nps1);
 
     //ball = new Ball(glm::vec3(0.0f, 0.0f, 0.0f));
-    uti::NetworkBall nball = ball.getNball();
-    p1->sendNBALLTCP(nball);
-    p2->sendNBALLTCP(nball);
 
-    std::cout << "P1: " << p1->getPaddle()->getX() << " : " << p1->getPaddle()->getZ() << std::endl;
-    std::cout << "P2: " << p2->getPaddle()->getX() << " : " << p2->getPaddle()->getZ() << std::endl;
+
+    //std::cout << "P1: " << p1->getPaddle()->getX() << " : " << p1->getPaddle()->getZ() << std::endl;
+    //std::cout << "P2: " << p2->getPaddle()->getX() << " : " << p2->getPaddle()->getZ() << std::endl;
 
 
 
     std::cout << "Game created with ID: " << gameID << std::endl;
+
+    game_created_time = uti::getCurrentTimestamp();
 }
 
 Game::~Game()
@@ -52,16 +52,25 @@ Player* Game::getOtherPlayer(short id)
     else					return p2;
 }
 
+void Game::sendBallToPlayers()
+{
+    uti::NetworkBall nball = ball.getNball();
+    p1->sendNBALLTCP(nball);
+    p2->sendNBALLTCP(nball);
+}
+
 void Game::run(SOCKET& udpSocket, float deltaTime)
 {
     //mtx.lock();
 
-    if (!p1 || !p2)
-    {
-        std::cout << "MTX UNLOCK IN RUN BC PLAYER NULLPTR";
-        //mtx.unlock();
-        return;
-    }
+    //if (!p1 || !p2)
+    //{
+    //    mtx.unlock();
+    //    return;
+    //}
+
+    //if (p1) std::cout << "P1 PAS NULLPTR" << std::endl;
+    //if (p2) std::cout << "P2 PAS NULLPTR" << std::endl;
 
     //std::cout << distanceBetweenHitboxes(&ball, p1->getPaddle()) << std::endl;
     //std::cout << ball.getX() << " : " << ball.getZ() << std::endl;
@@ -72,33 +81,45 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
 
     if      (ball.velocityX < 0 && p1) element = p1->getPaddle();
     else if (ball.velocityX > 0 && p2) element = p2->getPaddle();
-    
-    if (!element) 
+
+    if (!element)
     {
-        std::cout << "ELEMENT NULLPTR, SORTIE" << std::endl;
-        //mtx.unlock();
+        std::cout << "element nullptr" << std::endl;
         return;
     }
+
+    //std::cout << "P1: " << p1->getPaddle()->getX() << std::endl;
+    //std::cout << "P2: " << p2->getPaddle()->getX() << std::endl;
+
+    //mtx.unlock();
+
+    //
+    //if (!element) 
+    //{
+    //    std::cout << "ELEMENT NULLPTR, SORTIE" << std::endl;
+    //    //mtx.unlock();
+    //    return;
+    //}
 
     distance = distanceBetweenHitboxes(&ball, element);
 
     //std::cout << distanceBetweenHitboxes(&ball, &(*walls)[0]) << std::endl;
 
-    ////Si la distance avec le joueur est > 0, alors on vérifie la distance avec les murs
-    //if (distance > 0)
-    //{
-    //    for (Element& wall : *walls)
-    //    {
-    //        distance = distanceBetweenHitboxes(&wall, &ball);
+    //Si la distance avec le joueur est > 0, alors on vérifie la distance avec les murs
+    if (distance > 0)
+    {
+        for (Element& wall : *walls)
+        {
+            distance = distanceBetweenHitboxes(&wall, &ball);
 
-    //        if (distance == 0)//Si distance avec le mur == 0, on sort
-    //        {
-    //            element = &wall;
-    //            isPaddle = false;//passe à un si on est au contact d'un wall, sinon reste à 0
-    //            break;
-    //        }
-    //    }
-    //}
+            if (distance == 0)//Si distance avec le mur == 0, on sort
+            {
+                element = &wall;
+                isPaddle = false;//passe à un si on est au contact d'un wall, sinon reste à 0
+                break;
+            }
+        }
+    }
     
     //Si la distance avec le dernier élément comparé est > 0, on déplace la balle, sinon on traite la collision en fonction de l'élément
     if (distance > 0)
@@ -130,8 +151,12 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         }
 
         //--- Send data ---//
-        p1->send_NBUDP(udpSocket, &ball);
-        p2->send_NBUDP(udpSocket, &ball);
+        //p1->send_NBUDP(udpSocket, &ball);
+        //p2->send_NBUDP(udpSocket, &ball);
+
+        uti::NetworkBall nb = ball.getNball();
+        p1->sendNBALLTCP(nb);
+        p2->sendNBALLTCP(nb);
 
         while (distanceBetweenHitboxes(&ball, element) == 0)
         {

@@ -2,10 +2,7 @@
 
 Ball::Ball(glm::vec3 position) : Element(position)
 {
-	minPoint = glm::vec3(-1.0f, -1.0f, -1.0f);
-	maxPoint = glm::vec3( 1.0f,  1.0f,  1.0f);
-
-	updateModelMatrixFromPosition();
+	setMinMaxPoints(glm::vec3(-1.0f, -1.0f, -1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
 }
 
 uti::NetworkBall Ball::getNball()
@@ -15,6 +12,8 @@ uti::NetworkBall Ball::getNball()
 	nball.z			= position.z * 1000;
 	nball.velocityX = velocityX  * 1000;
 	nball.velocityZ = velocityZ  * 1000;
+
+	nball.timestamp = uti::getCurrentTimestamp();
 
 	return nball;
 }

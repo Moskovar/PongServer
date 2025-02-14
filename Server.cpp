@@ -71,8 +71,8 @@ Server::Server()//gérer les erreurs avec des exceptions
     ioctlsocket(udpSocket, FIONBIO, &mode);
 
     //--- Création des décors statiques ---//
-    walls.push_back(Wall(glm::vec3(0.0f, 0.0f, -40.0f), glm::vec3(-74.9124f, -1.0f, -41.0f), glm::vec3(74.9124f, 1.0f, -39.0f)));
-    walls.push_back(Wall(glm::vec3(0.0f, 0.0f,  40.0f), glm::vec3(-74.9124f, -1.0f, 39.0f), glm::vec3(74.9124f, 1.0f, 41.0f)));
+    walls.push_back(Wall(glm::vec3(0.0f, 0.0f, -40.0f)));
+    walls.push_back(Wall(glm::vec3(0.0f, 0.0f,  40.0f)));
 
 
     //t_check_connections = new thread(&Server::check_connections, this);
@@ -169,8 +169,9 @@ void Server::accept_connections()
                 {
                     if (games[i] == nullptr) { gameID = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
                 }
-
+                mtx_games.lock();
                 games[gameID] = new Game(gameID, v_players[0], v_players[1], &walls);
+                mtx_games.unlock();
                 v_players.erase(v_players.begin());//on enlève le premier élément
                 v_players.erase(v_players.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
 
@@ -205,13 +206,15 @@ void Server::listen_clientsTCP()
 
     while (run) 
     {
+        //std::cout << "LISTEN" << std::endl;
         FD_ZERO(&readfds); // reset l'ensemble &readfds
         for (auto it = players.begin(); it != players.end(); ++it)// inutile de lock, la partie qui supprime est après dans la même fonction donc pas de concurrence
             if (it->second && it->second->isSocketValid()) 
                 FD_SET(*it->second->getTCPSocket(), &readfds);
 
         // Vérifiez si le fd_set est vide
-        if (readfds.fd_count == 0) {
+        if (readfds.fd_count == 0) 
+        {
             // Aucun socket à surveiller, attendez un peu avant de réessayer
             std::this_thread::sleep_for(std::chrono::microseconds(100));
             continue;
@@ -237,7 +240,7 @@ void Server::listen_clientsTCP()
             }
 
             SOCKET* clientSocket = it->second->getTCPSocket();
-            if (clientSocket && FD_ISSET(*clientSocket, &readfds)) //On check si on le socket a reçu des données
+            if (clientSocket && it->second->connected && FD_ISSET(*clientSocket, &readfds)) //On check si on le socket a reçu des données
             {
                 char buffer[recvbuflen];
                 iResult = recv(*clientSocket, buffer, recvbuflen, 0);
@@ -294,6 +297,7 @@ void Server::listen_clientsTCP()
                 }
                 else if (iResult == 0 || iResult == SOCKET_ERROR) 
                 {
+                    if (it->second && !it->second->connected) continue;
                     //cout << "ERROR: " << WSAGetLastError() << " : " << iResult << endl;
                     //short gameID = -1;
                     //Game* game = nullptr;
@@ -306,10 +310,13 @@ void Server::listen_clientsTCP()
                     //        std::cout << "MTX LOCK BEFORE DELETE" << std::endl;
                     //    }
                     //}
-                    if (it->second) { delete it->second; it->second = nullptr; }
-                    it = players.erase(it);
+                    //if (it->second) { delete it->second; it->second = nullptr; }
+                    //it = players.erase(it);
+
+                    if (it->second) it->second->connected = false;
 
                     std::cout << "A client has been disconnected, " << players.size() << " left" << std::endl;
+                    std::cout << it->second->isSocketValid() << std::endl;
 
                     //if (game)
                     //{
@@ -324,6 +331,8 @@ void Server::listen_clientsTCP()
         
         mtx_players.unlock();
     }
+
+    std::cout << "t_listen_clientsTCP finished..." << std::endl;
 }
 
 void Server::listen_clientsUDP()
@@ -412,17 +421,68 @@ void Server::run_games()
         std::chrono::duration<float> deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        mtx_players.lock();
-
-        for (auto it = games.begin(); it != games.end(); ++it)
+        //mtx_games.lock();
+        for (auto it = games.begin(); it != games.end();)
         {
-            if(it->second) it->second->run(udpSocket, deltaTime.count());
-        }
+            if (it->second)
+            {
+                if (it->second->allPlayersDisconnected())
+                {
+                    mtx_players.lock();
+                    mtx_games.lock();
 
-        mtx_players.unlock();
+                    Player* p1 = it->second->getP1();
+                    if (p1)
+                    {
+                        players.erase(p1->getID());
+                        delete p1;
+                        p1 = nullptr;
+                    }
+
+                    Player* p2 = it->second->getP2();
+                    if (p2)
+                    {
+                        players.erase(p2->getID());
+                        delete p2;
+                        p2 = nullptr;
+                    }
+
+                    Game* game = it->second;
+                    it = games.erase(it);
+                    delete game;
+                    game = nullptr;
+
+
+                    mtx_games.unlock();
+                    mtx_players.unlock();
+
+                    continue;
+                }
+
+                //std::cout << "ALL PLAYERS DC: " << it->second->allPlayersDisconnected() << std::endl;
+                //std::cout << "P1 CONNECTED: " << it->second->getP1()->connected << std::endl;
+                //std::cout << "P2 CONNECTED: " << it->second->getP2()->connected << std::endl;
+
+                if (it->second->gameStarted)//Si la game a démarré, on la joue
+                {
+                    it->second->run(udpSocket, deltaTime.count());
+                }
+                else if (!it->second->gameStarted && uti::getCurrentTimestamp() - it->second->game_created_time >= 3)//si la game n'a pas démarré
+                {
+                    it->second->gameStarted = true;
+                    it->second->game_start_time = uti::getCurrentTimestamp();
+                    it->second->sendBallToPlayers();
+                }
+                
+            }
+            ++it;
+        }
+        //mtx_games.unlock();
+
 
         //std::cout << "DeltaTime: " << deltaTime.count() << std::endl;
 
         //std::this_thread::sleep_for(std::chrono::microseconds(1)); // Pause de 1 µs
+        //std::this_thread::sleep_for(std::chrono::seconds(1)); // Pause de 1 µs
     }
 }

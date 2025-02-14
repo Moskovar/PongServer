@@ -1,18 +1,5 @@
 #include "Player.h"
 
-Player::Player(SOCKET* tcpSocket, short id, short hp, float xMap, float yMap)
-{
-	this->tcpSocket = tcpSocket;
-	this->id		= id;
-    this->hp        = hp;
-	this->xMap		= xMap;
-	this->yMap		= yMap;
-
-    //Socket mit en mode non bloquant
-    u_long mode = 1;
-    ioctlsocket(*tcpSocket, FIONBIO, &mode);//mode non bloquant
-}
-
 Player::Player(SOCKET* tcpSocket, short id)
 {
     this->tcpSocket = tcpSocket;
@@ -59,21 +46,6 @@ void Player::setSide(short side)
     else { std::cout << "La paddle existe déjà..." << std::endl; }
 }
 
-void Player::applyDmg(short dmg)
-{
-    if (this->hp + dmg > 100) 
-    { 
-        this->hp = 100; 
-        return; 
-    }
-    else if (this->hp + dmg < 0)
-    {
-        this->hp = 0;
-        return;
-    }
-    this->hp += dmg;
-}
-
 void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 {
     std::cout << "NPS SENT: " << nps.header << " : " << nps.gameID << " : " << nps.id << " : " << nps.side << std::endl;
@@ -109,6 +81,12 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 
 void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
 {
+    if (!connected)
+    {
+        //std::cout << "CANT SEND UDP MSG, PLAYER DISCONNECTED" << std::endl;
+        return;
+    }
+
     //std::cout << "send_NPUDP" << std::endl;
     if (pData == nullptr) 
     { 
@@ -124,10 +102,10 @@ void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
 
     uti::NetworkPaddle np = pData->getNp();
 
-    np.header   = htons(np.header);
-    np.gameID = htons(np.gameID);
-    np.id = htons(np.id);
-    np.z = htonl(np.z);
+    np.header    = htons(np.header);
+    np.gameID    = htons(np.gameID);
+    np.id        = htons(np.id);
+    np.z         = htonl(np.z);
     np.timestamp = htonl(uti::getCurrentTimestamp());
 
     //std::cout << addrLen << std::endl;
@@ -184,6 +162,8 @@ void Player::send_NBUDP(SOCKET& udpSocket, Ball* ball)
 
 void Player::sendNBALLTCP(uti::NetworkBall nball)
 {
+    if (!connected) return;//si le joueur n'est pas connecté, on sort
+
     // Envoyer une réponse
     if (tcpSocket != nullptr)
     {
@@ -194,6 +174,7 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
         nball.z         = htonl(nball.z);
         nball.velocityX = htonl(nball.velocityX);
         nball.velocityZ = htonl(nball.velocityZ);
+        nball.timestamp = htonl(nball.timestamp);
 
         std::cout << "BALL SENT: " << ntohl(nball.x) << " : " << ntohl(nball.z) << " : " << ntohl(nball.velocityX) << " : " << ntohl(nball.velocityZ) << std::endl;
 

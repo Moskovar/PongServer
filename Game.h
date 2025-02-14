@@ -11,10 +11,17 @@ class Game
 		~Game();
 
 		Player* getOtherPlayer(short id);
+		Player* getP1() { return p1; }
+		Player* getP2() { return p2; }
+		bool isFinished() { return !p1->connected && !p2->connected; }
+		bool allPlayersDisconnected() { return !p1->connected && !p2->connected; }
 
+		void sendBallToPlayers();
 		void run(SOCKET& udpSocket, float deltaTime);
 
 		std::mutex mtx;
+		u_int64 game_created_time = 0, game_start_time = 0;
+		bool gameStarted = false;
 
 	private:
 		unsigned short gameID = 0, id = 0;

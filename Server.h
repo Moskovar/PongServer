@@ -39,7 +39,7 @@ class Server
 
 		sockaddr_in udpServerAddr, tcpServerAddr;//addesse du socket de connexion et du socket udp
 
-		mutex   mtx_players;//mutex pour gérer l'accès aux ressources 
+		mutex   mtx_players, mtx_games;//mutex pour gérer l'accès aux ressources 
 		thread* t_listen_clientsTCP = nullptr;//thread pour écouter les joueurs en TCP
 		thread* t_listen_clientsUDP = nullptr;//thread pour écouter les joueurs en UDP
 		thread* t_send_clientsTCP   = nullptr;//thread pour envoyer des données en TCP aux joueurs

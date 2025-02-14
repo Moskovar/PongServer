@@ -13,16 +13,12 @@ using namespace std;
 class Player
 {
 public:
-	Player(SOCKET* tcpSocket, short id, short hp, float xMap, float yMap);
 	Player(SOCKET* tcpSocket, short id);
 	~Player();
 
 	//--- Données du joueur ---//
 	short getID() { return id; }
 	int getAddrLen() { return addrLen; }
-	float getXMap() { return xMap; }
-	float getYMap() { return yMap; }
-	short getFaction() { return this->faction; }
 
 	short getGameID()	{ return gameID;	}
 	short getSide()		{ return side;		}
@@ -33,10 +29,6 @@ public:
 	void setSide(short side);//utilisé quand la game est créée, on créée le paddle également
 	void setZ(float z) { paddle->setZ(z); }
 	
-	void setPos(float xMap, float yMap) { this->xMap = xMap; this->yMap = yMap; }
-	void setFaction(short faction) { this->faction = faction; }
-	void applyDmg(short dmg);
-
 	//--- Lien entre la communication et le joueur ---//
 	void update(uti::NetworkPaddle& np);
 
@@ -62,9 +54,8 @@ private:
 	sockaddr_in addr = {};
 	int	  addrLen	= 0;
 	short	gameID	= -1,//-1 = pas de game
-			id		=  0, countDir	= 0   , hp         = 0   , faction    = 0   , spell = 0   , dir = 0;
-	float xMap = 0.0f, yMap = 0.0f, xCenterBox = 0.0f, yCenterBox = 0.0f, xRate = 0.0f, yRate = 0.0f, xChange = 0.0f, yChange = 0.0f, speed = 400,
-		z = 0.0f, paddleWidth = 10.2f;
+			id		=  0;
+	float z = 0.0f, paddleWidth = 10.2f;
 	Paddle* paddle = nullptr;
 
 	//Pong

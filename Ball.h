@@ -13,7 +13,7 @@ class Ball : public Element
 
 		float velocityX = 1.0f, velocityZ = 0.0f;
 
-		float moveSpeed = 25.0f;
+		float moveSpeed = 50.0f;
 
 	private:
 };

@@ -15,6 +15,7 @@ class Element
 
 		void setZ(float z);
 		void updateModelMatrixFromPosition();
+		void setMinMaxPoints(glm::vec3 minPoint, glm::vec3 maxPoint);
 
 	protected:
 		glm::vec3	position = glm::vec3(0.0f, 0.0f, 0.0f),
