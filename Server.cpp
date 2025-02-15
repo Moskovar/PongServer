@@ -20,7 +20,7 @@ Server::Server()//gérer les erreurs avec des exceptions
 
     //Initialisation de l'adresse et du port d'écoute du serveur TCP
     tcpServerAddr.sin_family = AF_INET;
-    tcpServerAddr.sin_port = htons(35500);
+    tcpServerAddr.sin_port = htons(50000);
     tcpServerAddr.sin_addr.s_addr = INADDR_ANY;
 
     //Bind du socket TCP à son adresse et port d'écoute
@@ -53,7 +53,7 @@ Server::Server()//gérer les erreurs avec des exceptions
 
     //Définition de l'adresse et du port d'écoute du socket UDP
     udpServerAddr.sin_family = AF_INET;
-    udpServerAddr.sin_port = htons(8080);
+    udpServerAddr.sin_port = htons(50001);
     udpServerAddr.sin_addr.s_addr = INADDR_ANY;
 
     //Bind du socket UDP à son adresse et port d'écoute
@@ -165,6 +165,13 @@ void Server::accept_connections()
 
             if (v_players.size() % 2 == 0)//si 2 joueurs alors on lance une game
             {   
+                if (!v_players[0]->connected)
+                {
+                    v_players.erase(v_players.begin());
+                    std::cout << "Player 1 disconnected ! Waiting for another player..." << std::endl;
+                    continue;
+                }
+
                 for (int i = 0; i < MAX_GAME_NUMBER; i++)//<= pour parcourir une case de plus et si tout est full alors la game sera placé à la fin (id = size)
                 {
                     if (games[i] == nullptr) { gameID = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
