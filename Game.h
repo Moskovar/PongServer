@@ -18,13 +18,15 @@ class Game
 
 		void resetBall();
 		void sendBallToPlayersTCP();
+		void sendBallSpeedTCP();
 		void sendBallToPlayersUDP(SOCKET& udpSocket);
 		void startRound();
 		void resetRound();
+		void increaseBallSpeed();
 		void run(SOCKET& udpSocket, float deltaTime);
 
 		std::mutex mtx;
-		u_int64 game_created_time = 0, round_start_time = 0;
+		u_int64 game_created_time = 0, round_start_time = 0, ballSpeed_increase = 0;
 		bool roundStarted = false;
 
 		SOCKET* udpSocket = nullptr;

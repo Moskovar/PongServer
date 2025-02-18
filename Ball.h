@@ -1,6 +1,8 @@
 #pragma once
 #include "Element.h"
 
+#define MAX_MOVESPEED 100
+
 class Ball : public Element
 {
 	public:
@@ -12,10 +14,11 @@ class Ball : public Element
 		void move(float deltaTime);
 		void reset();
 		void start(short direction);
+		bool increaseMoveSpeed();
 
 		float velocityX = 1.0f, velocityZ = 0.0f;
 
-		float moveSpeed = 100.0f;
+		short moveSpeed = 25;
 
 		Element* lastElementHit = nullptr;
 

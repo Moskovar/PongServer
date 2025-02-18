@@ -17,6 +17,7 @@ namespace uti {
 		NPS,
 		NP,
 		BALL,
+		BALLSPEED,
 		SPELL
 	};
 
@@ -60,6 +61,14 @@ namespace uti {
 	{
 		short header = Header::BALL;
 		int x = 0, z = 0, velocityX = 0, velocityZ = 0, timestamp = -1;
+	};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+	struct NetworkBallSpeed
+	{
+		short header = Header::BALLSPEED;
+		short speed = 0;
 	};
 #pragma pack(pop)
 

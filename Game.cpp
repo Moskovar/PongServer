@@ -24,6 +24,8 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
     p2->sendNPSTCP(nps1);
 
+    sendBallSpeedTCP();
+
     //ball = new Ball(glm::vec3(0.0f, 0.0f, 0.0f));
 
 
@@ -34,8 +36,11 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 
     std::cout << "Game created with ID: " << gameID << std::endl;
 
-    game_created_time   = uti::getCurrentTimestamp();
-    round_start_time    = uti::getCurrentTimestamp();
+    uint64_t now = uti::getCurrentTimestamp();
+
+    game_created_time   = now;
+    round_start_time    = now;
+    ballSpeed_increase  = now;
 }
 
 Game::~Game()
@@ -66,6 +71,14 @@ void Game::sendBallToPlayersTCP()
     p2->sendNBALLTCP(nball);
 }
 
+void Game::sendBallSpeedTCP()
+{
+    uti::NetworkBallSpeed nbs;
+    nbs.speed = ball.moveSpeed;
+    p1->sendNBALLSPEEDTCP(nbs);
+    p2->sendNBALLSPEEDTCP(nbs);
+}
+
 void Game::sendBallToPlayersUDP(SOCKET& udpSocket)
 {
     p1->send_BALLUDP(udpSocket, &ball);
@@ -88,11 +101,24 @@ void Game::resetRound()
     round_start_time = uti::getCurrentTimestamp();
 }
 
+void Game::increaseBallSpeed()
+{
+    if (ball.increaseMoveSpeed())
+        sendBallSpeedTCP();
+}
+
 void Game::run(SOCKET& udpSocket, float deltaTime)
 {
     float distance;
     Element* element = nullptr;
     short isPaddle = true;//pour vérifier le type d'Element, plus rapide qu'un dynamic cast ?
+
+    //Augmentation de la vitesse en fonction du temps
+    if ((uti::getCurrentTimestamp() - ballSpeed_increase) >= 1)
+    {
+        ballSpeed_increase = uti::getCurrentTimestamp();
+        increaseBallSpeed();
+    }
 
     if (ball.velocityX < 0 && p1)
     {

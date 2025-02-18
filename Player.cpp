@@ -211,3 +211,27 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
         }
     }
 }
+
+void Player::sendNBALLSPEEDTCP(uti::NetworkBallSpeed nbs)
+{
+    if (!connected) return;//si le joueur n'est pas connecté, on sort
+
+    // Envoyer une réponse
+    if (tcpSocket != nullptr)
+    {
+        //std::cout << "BALL SENT: " << nball.x << " : " << nball.z << " : " << nball.velocityX << " : " << nball.velocityZ << std::endl;
+
+        nbs.header = htons(nbs.header);
+        nbs.speed  = htons(nbs.speed);
+
+
+        std::cout << "BALLSPEED SENT: " << ntohs(nbs.speed) << std::endl;
+
+        int iResult = ::send(*tcpSocket, reinterpret_cast<const char*>(&nbs), sizeof(nbs), 0);
+        if (iResult == SOCKET_ERROR)
+        {
+            std::cerr << "send failed: " << WSAGetLastError() << std::endl;
+            closesocket(*tcpSocket);
+        }
+    }
+}

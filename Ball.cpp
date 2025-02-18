@@ -44,3 +44,14 @@ void Ball::start(short direction)//-1 gauche, 0 par défaut, 1 droite
 	if (direction != 0) velocityX = 1.0f * direction;
 	else				velocityX = 1.0f;
 }
+
+bool Ball::increaseMoveSpeed()
+{
+	if (moveSpeed < MAX_MOVESPEED)
+	{
+		++moveSpeed;
+		return true;
+	}
+
+	return false;
+}
