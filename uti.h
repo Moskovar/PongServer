@@ -11,20 +11,32 @@
 using namespace std;
 
 namespace uti {
-	enum Header {
-		NE = 0,
-		NES = 1,
-		NESE = 2,
-		NEF = 3,
-		NET = 4,
+	enum Header 
+	{
+		VERSION,
 		NPS,
 		NP,
-		BALL
+		BALL,
+		SPELL
 	};
 
-	struct MoveRate {//utile ??
+	enum SpellID
+	{
+		GRAVITY
+	};
+
+	struct MoveRate 
+	{//utile ??
 		float xRate, yRate;
 	};
+
+#pragma pack(push, 1)
+	struct NetworkVersion
+	{
+		short header = Header::VERSION;
+		int version = 0;
+	};
+#pragma pack(pop)
 
 #pragma pack(push, 1)
 	struct NetworkPaddleStart 
@@ -51,7 +63,16 @@ namespace uti {
 	};
 #pragma pack(pop)
 
+#pragma pack(push, 1)
+	struct NetworkSpell
+	{
+		short header = Header::SPELL;
+		short spellID;
+	};
+#pragma pack(pop)
+
 	uint64_t getCurrentTimestamp();
+	long long getCurrentTimestampMs();
 
 	extern map<int, map<int, string>> categories;
 

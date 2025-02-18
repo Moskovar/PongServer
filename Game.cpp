@@ -56,14 +56,20 @@ Player* Game::getOtherPlayer(short id)
 void Game::resetBall()
 {
     ball.reset();
-    sendBallToPlayers();
+    sendBallToPlayersTCP();
 }
 
-void Game::sendBallToPlayers()
+void Game::sendBallToPlayersTCP()
 {
     uti::NetworkBall nball = ball.getNball();
     p1->sendNBALLTCP(nball);
     p2->sendNBALLTCP(nball);
+}
+
+void Game::sendBallToPlayersUDP(SOCKET& udpSocket)
+{
+    p1->send_BALLUDP(udpSocket, &ball);
+    p2->send_BALLUDP(udpSocket, &ball);
 }
 
 void Game::startRound()
@@ -72,7 +78,7 @@ void Game::startRound()
 
     roundStarted = true;
     round_start_time = uti::getCurrentTimestamp();
-    sendBallToPlayers();
+    sendBallToPlayersTCP();
 }
 
 void Game::resetRound()
@@ -114,7 +120,7 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             lastWinner = p1;
         }
     }
-    else return;
+    //else return;
 
     distance = distanceBetweenHitboxes(&ball, element);
 
@@ -136,7 +142,7 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
     }
     
     //Si la distance avec le dernier élément comparé est > 0, on déplace la balle, sinon on traite la collision en fonction de l'élément
-    if (distance > 0)
+    if (distance > 0 || ball.lastElementHit == element)//ou si le dernier élément touché != element actuel -> évite de bloquer la balle dans le mur si elle se déplace pas assez après un rebond
     {
         ball.move(deltaTime);
     }
@@ -160,15 +166,19 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             ball.velocityZ = -ball.velocityZ;
         }
 
-        //--- Send data ---//
-        uti::NetworkBall nb = ball.getNball();
-        p1->sendNBALLTCP(nb);
-        p2->sendNBALLTCP(nb);
+        ball.lastElementHit = element;
 
-        while (distanceBetweenHitboxes(&ball, element) == 0)
-        {
-            ball.move(deltaTime);
-        }
+        //--- Send data ---//
+        //uti::NetworkBall nb = ball.getNball();
+        //p1->sendNBALLTCP(nb);
+        //p2->sendNBALLTCP(nb);
+        //p1->send_BALLUDP(udpSocket, &ball);
+        //p2->send_BALLUDP(udpSocket, &ball);
+
+        //while (distanceBetweenHitboxes(&ball, element) == 0)
+        //{
+        //    ball.move(deltaTime);
+        //}
     }
 }
 

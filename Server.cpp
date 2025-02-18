@@ -163,6 +163,8 @@ void Server::accept_connections()
             v_players.push_back(p);
             players[id] = p;
 
+            p->sendVersionTCP(1010);
+
             if (v_players.size() % 2 == 0)//si 2 joueurs alors on lance une game
             {   
                 if (!v_players[0]->connected)
@@ -215,9 +217,11 @@ void Server::listen_clientsTCP()
     {
         //std::cout << "LISTEN" << std::endl;
         FD_ZERO(&readfds); // reset l'ensemble &readfds
+        mtx_players.lock();
         for (auto it = players.begin(); it != players.end(); ++it)// inutile de lock, la partie qui supprime est après dans la même fonction donc pas de concurrence
             if (it->second && it->second->isSocketValid()) 
                 FD_SET(*it->second->getTCPSocket(), &readfds);
+        mtx_players.unlock();
 
         // Vérifiez si le fd_set est vide
         if (readfds.fd_count == 0) 
@@ -265,35 +269,37 @@ void Server::listen_clientsTCP()
                         //cout << "Header: " << header << endl;
 
                         unsigned long dataSize = 0;
-                        //if      (header == uti::Header::NE)   dataSize = sizeof(uti::NetworkEntity);
+                        if      (header == uti::Header::SPELL)   dataSize = sizeof(uti::NetworkSpell);
 
                         if (it->second->recvBuffer.size() >= dataSize)
                         {
                             // On gère les données reçu en fonction du header
-                            //if      (header == uti::Header::NE)
-                            //{
-                            //    uti::NetworkEntity ne;
-                            //    std::memcpy(&ne, it->second->recvBuffer.data(), sizeof(uti::NetworkEntity));
+                            if (header == uti::Header::SPELL)
+                            {
+                                uti::NetworkSpell ns;
+                                std::memcpy(&ns, it->second->recvBuffer.data(), sizeof(uti::NetworkSpell));
 
-                            //    ne.header    = ntohs(ne.header);
-                            //    ne.id        = ntohs(ne.id);
-                            //    ne.hp        = ntohs(ne.hp);
-                            //    ne.countDir  = ntohs(ne.countDir);
-                            //    ne.xMap      = ntohl(ne.xMap);
-                            //    ne.yMap      = ntohl(ne.yMap);
-                            //    ne.timestamp = ntohll(ne.timestamp);
+                                ns.header   = ntohs(ns.header);
+                                ns.spellID  = ntohs(ns.spellID);
+                                //ne.hp        = ntohs(ne.hp);
+                                //ne.countDir  = ntohs(ne.countDir);
+                                //ne.xMap      = ntohl(ne.xMap);
+                                //ne.yMap      = ntohl(ne.yMap);
+                                //ne.timestamp = ntohll(ne.timestamp);
 
-                            //    uint64_t now = static_cast<uint64_t>(std::time(nullptr));
+                                std::cout << "SPELL RECEIVED: " << ns.header << " : " << ns.spellID << std::endl;
 
-                            //    if (ne.timestamp > (now - 5)) {//Si les données ne datent pas trop on les gèrent
-                            //        //--- AJOUTER UNE VERIF DISTANCE PARCOURUE / TEMPS ---//
-                            //        it->second->update(ne);//On met à jour le joueur en fonction des données reçues
-                            //        send_NETCP(ne, it->second);//On envoie la nouvelle position du joueur à tous les joueurs
-                            //    }
-                            //    else {//Si les données datent trop, on cancel l'action en renvoyant les dernières data connues par le serveur
-                            //        send_NETCP(it->second->getNE());
-                            //    }
-                            //}
+                                //uint64_t now = static_cast<uint64_t>(std::time(nullptr));
+
+                                //if (ns.timestamp > (now - 5)) {//Si les données ne datent pas trop on les gèrent
+                                //    //--- AJOUTER UNE VERIF DISTANCE PARCOURUE / TEMPS ---//
+                                //    it->second->update(ns);//On met à jour le joueur en fonction des données reçues
+                                //    send_NETCP(ne, it->second);//On envoie la nouvelle position du joueur à tous les joueurs
+                                //}
+                                //else {//Si les données datent trop, on cancel l'action en renvoyant les dernières data connues par le serveur
+                                //    //send_NETCP(it->second->getNE());
+                                //}
+                            }
 
                             it->second->recvBuffer.erase(it->second->recvBuffer.begin(), it->second->recvBuffer.begin() + dataSize);
                         }
@@ -306,30 +312,11 @@ void Server::listen_clientsTCP()
                 {
                     if (it->second && !it->second->connected) continue;
                     //cout << "ERROR: " << WSAGetLastError() << " : " << iResult << endl;
-                    //short gameID = -1;
-                    //Game* game = nullptr;
-                    //if (it->second && it->second->getGameID() != -1)
-                    //{
-                    //    game = games[it->second->getGameID()];
-                    //    if (game)
-                    //    {
-                    //        game->mtx.lock();
-                    //        std::cout << "MTX LOCK BEFORE DELETE" << std::endl;
-                    //    }
-                    //}
-                    //if (it->second) { delete it->second; it->second = nullptr; }
-                    //it = players.erase(it);
 
                     if (it->second) it->second->connected = false;
 
                     std::cout << "A client has been disconnected, " << players.size() << " left" << std::endl;
-                    std::cout << it->second->isSocketValid() << std::endl;
 
-                    //if (game)
-                    //{
-                    //    std::cout << "MTX UNLOCK AFTER DELETE" << std::endl;
-                    //    game->mtx.unlock();
-                    //}
                     continue;
                 }
             }
@@ -421,12 +408,15 @@ void Server::run_games()
 {
     using Clock = std::chrono::high_resolution_clock;
     auto lastTime = Clock::now();
+    last_timestamp_send_ball = uti::getCurrentTimestampMs();
 
     while (run)
     {
         auto currentTime = Clock::now();
         std::chrono::duration<float> deltaTime = currentTime - lastTime;
         lastTime = currentTime;
+
+        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) last_timestamp_send_ball = uti::getCurrentTimestampMs();
 
         //mtx_games.lock();
         for (auto it = games.begin(); it != games.end();)
@@ -473,12 +463,14 @@ void Server::run_games()
                 if (it->second->roundStarted)//Si la game a démarré, on la joue
                 {
                     it->second->run(udpSocket, deltaTime.count());
+                    //std::cout << uti::getCurrentTimestampMs() - last_timestamp_send_ball << std::endl;
+                    if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
+                        it->second->sendBallToPlayersUDP(udpSocket);
                 }
                 else if (!it->second->roundStarted && uti::getCurrentTimestamp() - it->second->round_start_time >= 3)//si la game n'a pas démarré
                 {
                     it->second->startRound();
                 }
-                
             }
             ++it;
         }

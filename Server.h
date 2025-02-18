@@ -37,6 +37,8 @@ class Server
 		std::vector<Player*>	v_players;
 		std::map<int, Game*>	games;
 
+		long long last_timestamp_send_ball = 0;
+
 		sockaddr_in udpServerAddr, tcpServerAddr;//addesse du socket de connexion et du socket udp
 
 		mutex   mtx_players, mtx_games;//mutex pour gérer l'accès aux ressources 

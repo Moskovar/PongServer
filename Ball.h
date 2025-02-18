@@ -15,7 +15,9 @@ class Ball : public Element
 
 		float velocityX = 1.0f, velocityZ = 0.0f;
 
-		float moveSpeed = 50.0f;
+		float moveSpeed = 100.0f;
+
+		Element* lastElementHit = nullptr;
 
 	private:
 };

@@ -46,6 +46,31 @@ void Player::setSide(short side)
     else { std::cout << "La paddle existe déjà..." << std::endl; }
 }
 
+void Player::sendVersionTCP(int version)
+{
+    uti::NetworkVersion nv;
+
+    // Convertir les valeurs en big-endian avant l'envoi
+    nv.header   = htons(nv.header);
+    nv.version  = htonl(version);
+
+    // Envoi sécurisé des données
+    int totalSent = 0;
+    int dataSize = sizeof(nv);
+    const char* data = reinterpret_cast<const char*>(&nv);
+
+    while (totalSent < dataSize) {
+        int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+        if (iResult == SOCKET_ERROR)
+        {
+            std::cerr << "send failed: " << WSAGetLastError() << std::endl;
+            closesocket(*tcpSocket);
+            return;
+        }
+        totalSent += iResult;
+    }
+}
+
 void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 {
     std::cout << "NPS SENT: " << nps.header << " : " << nps.gameID << " : " << nps.id << " : " << nps.side << std::endl;
@@ -122,7 +147,7 @@ void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
     //}
 }
 
-void Player::send_NBUDP(SOCKET& udpSocket, Ball* ball)
+void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
 {
     //std::cout << "send_NPUDP" << std::endl;
     if (ball == nullptr)
@@ -167,16 +192,16 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
     // Envoyer une réponse
     if (tcpSocket != nullptr)
     {
-        std::cout << "BALL SENT: " << nball.x << " : " << nball.z << " : " << nball.velocityX << " : " << nball.velocityZ << std::endl;
+        //std::cout << "BALL SENT: " << nball.x << " : " << nball.z << " : " << nball.velocityX << " : " << nball.velocityZ << std::endl;
         
         nball.header    = htons(nball.header);
         nball.x         = htonl(nball.x);
         nball.z         = htonl(nball.z);
-        nball.velocityX = htonl(nball.velocityX);
-        nball.velocityZ = htonl(nball.velocityZ);
+        nball.velocityX = htonl(static_cast<int32_t>(nball.velocityX));
+        nball.velocityZ = htonl(static_cast<int32_t>(nball.velocityZ));
         nball.timestamp = htonl(nball.timestamp);
 
-        std::cout << "BALL SENT: " << ntohl(nball.x) << " : " << ntohl(nball.z) << " : " << ntohl(nball.velocityX) << " : " << ntohl(nball.velocityZ) << std::endl;
+        std::cout << "BALL SENT: " << (float)(ntohl(nball.x) / 1000.0f) << " : " << (float)(ntohl(nball.z) / 1000.0f) << " : " << (float)(ntohl(nball.velocityX) / 1000.0f) << " : " << (float)(ntohl(nball.velocityZ) / 1000.0f) << std::endl;
 
         int iResult = ::send(*tcpSocket, reinterpret_cast<const char*>(&nball), sizeof(nball), 0);
         if (iResult == SOCKET_ERROR)

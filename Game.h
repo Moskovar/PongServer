@@ -17,7 +17,8 @@ class Game
 		bool allPlayersDisconnected() { return !p1->connected && !p2->connected; }
 
 		void resetBall();
-		void sendBallToPlayers();
+		void sendBallToPlayersTCP();
+		void sendBallToPlayersUDP(SOCKET& udpSocket);
 		void startRound();
 		void resetRound();
 		void run(SOCKET& udpSocket, float deltaTime);
@@ -25,6 +26,8 @@ class Game
 		std::mutex mtx;
 		u_int64 game_created_time = 0, round_start_time = 0;
 		bool roundStarted = false;
+
+		SOCKET* udpSocket = nullptr;
 
 	private:
 		unsigned short gameID = 0, id = 0;
