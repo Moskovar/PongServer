@@ -12,6 +12,7 @@ uti::NetworkBall Ball::getNball()
 	nball.z			= position.z * 1000;
 	nball.velocityX = velocityX  * 1000;
 	nball.velocityZ = velocityZ  * 1000;
+	nball.speed		= moveSpeed;
 
 	nball.timestamp = uti::getCurrentTimestamp();
 
@@ -25,6 +26,8 @@ void Ball::turnback()
 
 void Ball::move(float deltaTime)
 {
+	timestamp = uti::getCurrentTimestampMs();
+
 	position.x += moveSpeed * deltaTime * velocityX;
 	position.z += moveSpeed * deltaTime * velocityZ;
 

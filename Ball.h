@@ -20,6 +20,8 @@ class Ball : public Element
 
 		short moveSpeed = 25;
 
+		uint32_t timestamp = 0;
+
 		Element* lastElementHit = nullptr;
 
 	private:

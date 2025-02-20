@@ -18,9 +18,8 @@ class Game
 
 		void resetBall();
 		void sendBallToPlayersTCP();
-		void sendBallSpeedTCP();
 		void sendBallToPlayersUDP(SOCKET& udpSocket);
-		void startRound();
+		void startRound(SOCKET& udpSocket);
 		void resetRound();
 		void increaseBallSpeed();
 		void run(SOCKET& udpSocket, float deltaTime);

@@ -469,7 +469,7 @@ void Server::run_games()
                 }
                 else if (!it->second->roundStarted && uti::getCurrentTimestamp() - it->second->round_start_time >= 3)//si la game n'a pas démarré
                 {
-                    it->second->startRound();
+                    it->second->startRound(udpSocket);
                 }
             }
             ++it;

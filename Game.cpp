@@ -24,8 +24,6 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
     p2->sendNPSTCP(nps1);
 
-    sendBallSpeedTCP();
-
     //ball = new Ball(glm::vec3(0.0f, 0.0f, 0.0f));
 
 
@@ -67,16 +65,10 @@ void Game::resetBall()
 void Game::sendBallToPlayersTCP()
 {
     uti::NetworkBall nball = ball.getNball();
+    nball.timestamp = ball.timestamp;
+
     p1->sendNBALLTCP(nball);
     p2->sendNBALLTCP(nball);
-}
-
-void Game::sendBallSpeedTCP()
-{
-    uti::NetworkBallSpeed nbs;
-    nbs.speed = ball.moveSpeed;
-    p1->sendNBALLSPEEDTCP(nbs);
-    p2->sendNBALLSPEEDTCP(nbs);
 }
 
 void Game::sendBallToPlayersUDP(SOCKET& udpSocket)
@@ -85,13 +77,13 @@ void Game::sendBallToPlayersUDP(SOCKET& udpSocket)
     p2->send_BALLUDP(udpSocket, &ball);
 }
 
-void Game::startRound()
+void Game::startRound(SOCKET& udpSocket)
 {
     ball.start((lastWinner) ? -lastWinner->getSide() : 0);
 
     roundStarted = true;
     round_start_time = uti::getCurrentTimestamp();
-    sendBallToPlayersTCP();
+    sendBallToPlayersUDP(udpSocket);
 }
 
 void Game::resetRound()
@@ -103,8 +95,9 @@ void Game::resetRound()
 
 void Game::increaseBallSpeed()
 {
-    if (ball.increaseMoveSpeed())
-        sendBallSpeedTCP();
+    ball.increaseMoveSpeed();
+    //if (ball.increaseMoveSpeed())
+    //    sendBallSpeedTCP();
 }
 
 void Game::run(SOCKET& udpSocket, float deltaTime)

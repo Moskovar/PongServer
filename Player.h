@@ -44,7 +44,6 @@ public:
 	void sendVersionTCP(int version);
 	void sendNPSTCP(uti::NetworkPaddleStart ne);
 	void sendNBALLTCP(uti::NetworkBall nball);
-	void sendNBALLSPEEDTCP(uti::NetworkBallSpeed nbs);
 
 	void send_NPUDP(SOCKET& udpSocket, Player* pData);
 	void send_BALLUDP(SOCKET udpSocket, Ball* ball);

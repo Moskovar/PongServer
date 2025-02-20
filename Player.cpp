@@ -169,7 +169,10 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
     nb.z            = htonl(nb.z);
     nb.velocityX    = htonl(nb.velocityX);
     nb.velocityZ    = htonl(nb.velocityZ);
-    nb.timestamp    = htonl(uti::getCurrentTimestamp());
+    nb.speed        = htons(nb.speed);
+    nb.timestamp    = htonl(ball->timestamp);
+
+    //std::cout << "BALL SENT: " << ntohl(nb.timestamp) << std::endl;
 
     //std::cout << addrLen << std::endl;
 
@@ -201,33 +204,9 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
         nball.velocityZ = htonl(static_cast<int32_t>(nball.velocityZ));
         nball.timestamp = htonl(nball.timestamp);
 
-        std::cout << "BALL SENT: " << (float)(ntohl(nball.x) / 1000.0f) << " : " << (float)(ntohl(nball.z) / 1000.0f) << " : " << (float)(ntohl(nball.velocityX) / 1000.0f) << " : " << (float)(ntohl(nball.velocityZ) / 1000.0f) << std::endl;
+        std::cout << "BALL SENT: " << (float)(ntohl(nball.x) / 1000.0f) << " : " << (float)(ntohl(nball.z) / 1000.0f) << " : " << (float)(ntohl(nball.velocityX) / 1000.0f) << " : " << (float)(ntohl(nball.velocityZ) / 1000.0f) << " -> " << nball.timestamp << std::endl;
 
         int iResult = ::send(*tcpSocket, reinterpret_cast<const char*>(&nball), sizeof(nball), 0);
-        if (iResult == SOCKET_ERROR)
-        {
-            std::cerr << "send failed: " << WSAGetLastError() << std::endl;
-            closesocket(*tcpSocket);
-        }
-    }
-}
-
-void Player::sendNBALLSPEEDTCP(uti::NetworkBallSpeed nbs)
-{
-    if (!connected) return;//si le joueur n'est pas connecté, on sort
-
-    // Envoyer une réponse
-    if (tcpSocket != nullptr)
-    {
-        //std::cout << "BALL SENT: " << nball.x << " : " << nball.z << " : " << nball.velocityX << " : " << nball.velocityZ << std::endl;
-
-        nbs.header = htons(nbs.header);
-        nbs.speed  = htons(nbs.speed);
-
-
-        std::cout << "BALLSPEED SENT: " << ntohs(nbs.speed) << std::endl;
-
-        int iResult = ::send(*tcpSocket, reinterpret_cast<const char*>(&nbs), sizeof(nbs), 0);
         if (iResult == SOCKET_ERROR)
         {
             std::cerr << "send failed: " << WSAGetLastError() << std::endl;
