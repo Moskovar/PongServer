@@ -89,7 +89,9 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
     int dataSize = sizeof(nps);
     const char* data = reinterpret_cast<const char*>(&nps);
 
-    while (totalSent < dataSize) {
+    while (totalSent < dataSize) 
+    {
+        if (!tcpSocket || *tcpSocket == INVALID_SOCKET) return;
         int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
         if (iResult == SOCKET_ERROR)
         {

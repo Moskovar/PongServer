@@ -33,23 +33,25 @@ class Server
 
 		SOCKET connectionSocket = INVALID_SOCKET;//socket pour recevoir et accepter les connexions des clients
 		SOCKET udpSocket		= INVALID_SOCKET;//socket pour communiquer en UDP
-		map<int, Player*>		players;//liste dans laquelle sont placés les nouveaux joueurs dont la connexion a été acceptée -> accès rapide
-		std::vector<Player*>	v_players;
+		std::map<int, Player*>	players;//liste dans laquelle sont placés les nouveaux joueurs dont la connexion a été acceptée -> accès rapide
+		std::vector<Player*>	matchmaking;
 		std::map<int, Game*>	games;
 
 		long long last_timestamp_send_ball = 0;
 
 		sockaddr_in udpServerAddr, tcpServerAddr;//addesse du socket de connexion et du socket udp
 
-		mutex   mtx_players, mtx_games;//mutex pour gérer l'accès aux ressources 
+		mutex   mtx_players, mtx_matchmaking, mtx_games;//mutex pour gérer l'accès aux ressources 
 		thread* t_listen_clientsTCP = nullptr;//thread pour écouter les joueurs en TCP
 		thread* t_listen_clientsUDP = nullptr;//thread pour écouter les joueurs en UDP
 		thread* t_send_clientsTCP   = nullptr;//thread pour envoyer des données en TCP aux joueurs
 		thread* t_send_clientsUDP   = nullptr;//thread pour envoyer des données en UDP aux joueurs
-		thread* t_run_games			= nullptr;
+		thread* t_run_games			= nullptr;//thread qui s'occupe de faire tourner les parties
+		thread* t_run_matchmaking	= nullptr;//thread qui s'occupe de créer les parties
 
 		void listen_clientsTCP();
 		void listen_clientsUDP();
 		void run_games();
+		void run_matchmaking();
 };
 

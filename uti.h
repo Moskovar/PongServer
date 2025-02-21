@@ -14,6 +14,7 @@ namespace uti {
 	enum Header 
 	{
 		VERSION,
+		MATCHMAKING,
 		NPS,
 		NP,
 		BALL,
@@ -36,6 +37,13 @@ namespace uti {
 	{
 		short header = Header::VERSION;
 		int version = 0;
+	};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+	struct NetworkMatchmaking
+	{
+		short header = Header::MATCHMAKING;
 	};
 #pragma pack(pop)
 
@@ -78,7 +86,6 @@ namespace uti {
 	long long getCurrentTimestampMs();
 
 	extern map<int, map<int, string>> categories;
-
 
 	struct OBB
 	{

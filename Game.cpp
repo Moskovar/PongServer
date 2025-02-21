@@ -18,19 +18,17 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     uti::NetworkPaddleStart nps1 = p1->getNps();
     uti::NetworkPaddleStart nps2 = p2->getNps();
 
-    p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
-    p1->sendNPSTCP(nps2);
+    if(p1)
+    {
+        p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
+        p1->sendNPSTCP(nps2);
+    }
 
-    p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
-    p2->sendNPSTCP(nps1);
-
-    //ball = new Ball(glm::vec3(0.0f, 0.0f, 0.0f));
-
-
-    //std::cout << "P1: " << p1->getPaddle()->getX() << " : " << p1->getPaddle()->getZ() << std::endl;
-    //std::cout << "P2: " << p2->getPaddle()->getX() << " : " << p2->getPaddle()->getZ() << std::endl;
-
-
+    if(p2)
+    {
+        p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
+        p2->sendNPSTCP(nps1);
+    }
 
     std::cout << "Game created with ID: " << gameID << std::endl;
 
