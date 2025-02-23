@@ -71,8 +71,8 @@ Server::Server()//gérer les erreurs avec des exceptions
     ioctlsocket(udpSocket, FIONBIO, &mode);
 
     //--- Création des décors statiques ---//
-    walls.push_back(Wall(glm::vec3(0.0f, 0.0f, -40.0f)));
-    walls.push_back(Wall(glm::vec3(0.0f, 0.0f,  40.0f)));
+    walls.push_back(Wall(glm::vec3(0.0f, 0.0f, -40.5f)));
+    walls.push_back(Wall(glm::vec3(0.0f, 0.0f,  40.5f)));
 
 
     //t_check_connections = new thread(&Server::check_connections, this);
@@ -169,7 +169,9 @@ void Server::accept_connections()
             Player* p = new Player(tcpSocket, id);
         
             //matchmaking.push_back(p);
+            mtx_players.lock();
             players[id] = p;
+            mtx_players.unlock();
 
             p->sendVersionTCP(1010);//on envoie la version au joueur
 
@@ -178,18 +180,6 @@ void Server::accept_connections()
         else std::cerr << "Connexion échoué -> erreur: " << WSAGetLastError() << std::endl;
         std::cout << "Waiting for new connection..." << std::endl;
     }
-}
-
-//--- Convertie un timestamp en string ---//
-std::string timestampToTimeString(uint64_t timestamp) {
-    time_t rawTime = static_cast<time_t>(timestamp);
-    struct tm localTime;
-    localtime_s(&localTime, &rawTime);
-
-    char buffer[80];
-    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime);
-
-    return buffer;
 }
 
 //--- Ecoute les messages envoyés par l'ensemble des joueurs connectés ---//
@@ -203,11 +193,36 @@ void Server::listen_clientsTCP()
     {
         //std::cout << "LISTEN" << std::endl;
         FD_ZERO(&readfds); // reset l'ensemble &readfds
-        mtx_players.lock();
-        for (auto it = players.begin(); it != players.end(); ++it)// inutile de lock, la partie qui supprime est après dans la même fonction donc pas de concurrence
-            if (it->second && it->second->isSocketValid()) 
-                FD_SET(*it->second->getTCPSocket(), &readfds);
-        mtx_players.unlock();
+        mtx_players.lock();//lock manuellement
+        for (auto it = players.begin(); it != players.end();)
+        {
+            Player* p = it->second;
+            if ((!p || !p->connected || !p->isSocketValid()) && p && !p->inGame)//Si un joueur n'est plus valid (déco nullptr etc) on le nettoie
+            {
+                if (p)
+                {
+                    if (p->isSocketValid())
+                    {
+                        SOCKET* tcpSocket = p->getTCPSocket();
+                        closesocket(*tcpSocket);
+                        tcpSocket = nullptr;
+                    }
+
+                    delete p;
+                    p = nullptr;
+                }
+
+                it = players.erase(it);//si le pointeur est nullptr, on supprime le player de la liste des joueurs
+
+                std::cout << "A disconnected player has been removed... " << players.size() << " left !" << std::endl;
+                continue;
+            }
+
+            if(it->second) FD_SET(*it->second->getTCPSocket(), &readfds);
+
+            ++it;
+        }
+        mtx_players.unlock();//unlock manuellement pour éviter les 100ms de pause après
 
         // Vérifiez si le fd_set est vide
         if (readfds.fd_count == 0) 
@@ -226,16 +241,9 @@ void Server::listen_clientsTCP()
             continue;
         }
 
-        mtx_players.lock();
-
+        std::lock_guard<std::mutex> lock_players(mtx_players);
         for (auto it = players.begin(); it != players.end();) 
         {
-            if (!it->second) 
-            {
-                it = players.erase(it);//si le pointeur est nullptr, on supprime le player de la liste des joueurs
-                continue;
-            }
-
             SOCKET* clientSocket = it->second->getTCPSocket();
             if (clientSocket && it->second->connected && FD_ISSET(*clientSocket, &readfds)) //On check si on le socket a reçu des données
             {
@@ -252,11 +260,12 @@ void Server::listen_clientsTCP()
                         short header = 0;
                         std::memcpy(&header, it->second->recvBuffer.data(), sizeof(short));
                         header = ntohs(header);
-                        cout << "Header: " << header << endl;
+                        //cout << "Header: " << header << endl;
 
                         unsigned long dataSize = 0;
                         if      (header == uti::Header::SPELL)          dataSize = sizeof(uti::NetworkSpell);
                         else if (header == uti::Header::MATCHMAKING)    dataSize = sizeof(uti::NetworkMatchmaking);
+                        else if (header == uti::Header::STATE)          dataSize = sizeof(uti::NetworkState);
 
                         if (it->second->recvBuffer.size() >= dataSize)
                         {
@@ -317,6 +326,17 @@ void Server::listen_clientsTCP()
                                 }
                                 mtx_matchmaking.unlock();
                             }
+                            else if (header == uti::Header::STATE)
+                            {
+                                uti::NetworkState nst;
+                                std::memcpy(&nst, it->second->recvBuffer.data(), sizeof(uti::NetworkState));
+
+                                nst.header = ntohs(nst.header);
+                                nst.inGame = ntohs(nst.inGame);
+
+                                std::cout << "STATE RECEIVED: " << nst.header << " : " << nst.inGame << std::endl;
+                            }
+                            
                             it->second->recvBuffer.erase(it->second->recvBuffer.begin(), it->second->recvBuffer.begin() + dataSize);
                         }
                         else {
@@ -338,8 +358,6 @@ void Server::listen_clientsTCP()
             }
             ++it;
         }
-        
-        mtx_players.unlock();
     }
 
     std::cout << "t_listen_clientsTCP finished..." << std::endl;
@@ -377,13 +395,20 @@ void Server::listen_clientsUDP()
             sockaddr_in clientAddr;
             uti::NetworkPaddle np;
             int clientAddrLen = sizeof(clientAddr);
+            int error = 0;
 
             int bytesReceived = recvfrom(udpSocket, (char*)&np, sizeof(np), 0, (sockaddr*)&clientAddr, &clientAddrLen);
-            if (bytesReceived <= 0) std::cerr << "Erreur lors de la reception des donnees." << WSAGetLastError() << std::endl;
+            if (bytesReceived <= 0)
+            {
+                error = WSAGetLastError();
+                if(error != 10054)//10054 = le client a fermé la connexion brutalement
+                    std::cerr << "Erreur lors de la reception des donnees." << error << std::endl;
+            }
 
             // Vérifiez si le message reçu est complet en comparant la taille des données reçues avec la taille attendue.
-            if (bytesReceived != sizeof(np)) {
-                std::cerr << "Le message UDP reçu est incomplet." << std::endl;
+            if (bytesReceived != sizeof(np)) 
+            {
+                if(error != 10054) std::cerr << "Le message UDP received est incomplet." << std::endl;
                 continue; // Si le message n'est pas complet, passez à l'itération suivante.
             }
 
@@ -400,17 +425,6 @@ void Server::listen_clientsUDP()
                 players[np.id]->update(np);
 
                 games[np.gameID]->getOtherPlayer(np.id)->send_NPUDP(udpSocket, players[np.id]);
-
-                //if(np.gameID != 0) 
-                //ne.spell = htons(ne.spell);
-                //float xMap = (float)np.xMap / 100;
-                //float yMap = (float)np.yMap / 100;
-                //players[np.id]->setPos(xMap, yMap);
-                ////players[ne.id]->spell = ne.spell;
-                //sockaddr_in cli = *players[np.id]->getPAddr();
-                //char clientIp[INET_ADDRSTRLEN];
-                //inet_ntop(AF_INET, &(cli.sin_addr), clientIp, INET_ADDRSTRLEN);
-                //cout << players[np.id]->getID() << " : " << players[np.id]->getXMap() << " : " << players[np.id]->getYMap() << " : " << clientIp << endl;
             }
             else
             {
@@ -432,54 +446,40 @@ void Server::run_games()
         std::chrono::duration<float> deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) last_timestamp_send_ball = uti::getCurrentTimestampMs();
+        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //17 ~= 60fps
+            last_timestamp_send_ball = uti::getCurrentTimestampMs();
 
-        //mtx_games.lock();
+        std::lock_guard<std::mutex> lock_players(mtx_players);
+        std::lock_guard<std::mutex> lock_games(mtx_games);
         for (auto it = games.begin(); it != games.end();)
         {
             if (it->second)
             {
-                if (it->second->allPlayersDisconnected())
-                {
-                    mtx_players.lock();
-                    mtx_games.lock();
+                std::cout << "P1 DC: "  << !it->second->getP1()->connected << std::endl;
+                std::cout << "P2 DC: "  << !it->second->getP2()->connected << std::endl;
+                std::cout << "ALL DC: " <<  it->second->allPlayersDisconnected() << std::endl;
 
+                if (it->second->allPlayersDisconnected() || it->second->allPlayersLeftGame())
+                {
                     Player* p1 = it->second->getP1();
-                    if (p1)
-                    {
-                        players.erase(p1->getID());
-                        delete p1;
-                        p1 = nullptr;
-                    }
+                    if (p1) p1->inGame = false;
 
                     Player* p2 = it->second->getP2();
-                    if (p2)
-                    {
-                        players.erase(p2->getID());
-                        delete p2;
-                        p2 = nullptr;
-                    }
+                    if (p2) p2->inGame = false;
 
                     Game* game = it->second;
-                    it = games.erase(it);
                     delete game;
                     game = nullptr;
+                    it = games.erase(it);
 
-
-                    mtx_games.unlock();
-                    mtx_players.unlock();
+                    std::cout << "A game has been finished from disconnexion..." << std::endl;
 
                     continue;
                 }
 
-                //std::cout << "ALL PLAYERS DC: " << it->second->allPlayersDisconnected() << std::endl;
-                //std::cout << "P1 CONNECTED: " << it->second->getP1()->connected << std::endl;
-                //std::cout << "P2 CONNECTED: " << it->second->getP2()->connected << std::endl;
-
                 if (it->second->roundStarted)//Si la game a démarré, on la joue
                 {
                     it->second->run(udpSocket, deltaTime.count());
-                    //std::cout << uti::getCurrentTimestampMs() - last_timestamp_send_ball << std::endl;
                     if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
                         it->second->sendBallToPlayersUDP(udpSocket);
                 }
@@ -490,13 +490,8 @@ void Server::run_games()
             }
             ++it;
         }
-        //mtx_games.unlock();
-
 
         //std::cout << "DeltaTime: " << deltaTime.count() << std::endl;
-
-        //std::this_thread::sleep_for(std::chrono::microseconds(1)); // Pause de 1 µs
-        //std::this_thread::sleep_for(std::chrono::seconds(1)); // Pause de 1 µs
     }
 }
 
@@ -505,33 +500,52 @@ void Server::run_matchmaking()
     while(run)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::unique_lock<std::mutex> lock(mtx_matchmaking);
-        if (matchmaking.size() == 0) continue;
+        std::unique_lock<std::mutex> lock_mm(mtx_matchmaking);//attention à l'ordre de lock
+        std::unique_lock<std::mutex> lock_players(mtx_players);//doit tjrs être lock dans le même ordre
+
+        int nb_players = matchmaking.size();
+
+        if (nb_players < 2) continue;//s'il y a moins de 2 joueurs dans le matchmaking on skip
 
         int gameID = -1;
-        if (matchmaking.size() % 2 == 0)//si 2 joueurs alors on lance une game
+
+        Player* p1 = matchmaking[0];
+        Player* p2 = matchmaking[1];
+
+        if (!p1 || !p1->connected || !p1->isSocketValid())//si le joueur est déconnecté, on l'enlève du matchmaking et on recommence la boucle
         {
-            if (!matchmaking[0]->connected)//si le joueur est déconnecté, on l'enlève du matchmaking et on recommence la boucle
-            {
-                matchmaking.erase(matchmaking.begin());
-                std::cout << "Player 1 disconnected ! Waiting for another player..." << std::endl;
-                continue;
-            }
-
-            for (int i = 0; i < MAX_GAME_NUMBER; i++)//<= pour parcourir une case de plus et si tout est full alors la game sera placé à la fin (id = size)
-            {
-                if (games[i] == nullptr) { gameID = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
-            }
-
-            if (gameID == -1) continue;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
-
-            mtx_games.lock();
-            games[gameID] = new Game(gameID, matchmaking[0], matchmaking[1], &walls);
-            mtx_games.unlock();
-            matchmaking.erase(matchmaking.begin());//on enlève le premier élément
-            matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
-
-            std::cout << "Game is starting..." << std::endl;
+            matchmaking.erase(matchmaking.begin());
+            std::cout << "A player left the matchmaking ! Players waiting for a game: " << matchmaking.size() << std::endl;
+            continue;
         }
+
+        for (int i = 0; i < MAX_GAME_NUMBER; i++)
+        {
+            if (games[i] == nullptr) //si on trouve un trou, on met id à i et on sort de la boucle
+            { 
+                gameID = i; 
+                break; 
+            }
+        }
+
+        if (gameID == -1) continue;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
+
+        Game* game = new Game(gameID, p1, p2, &walls);
+
+        if (!game)
+        {
+            std::cerr << "Error: Could not create a new game!" << std::endl;
+            continue;
+        }
+
+        mtx_games.lock();
+        games[gameID] = game;
+        mtx_games.unlock();
+
+
+        matchmaking.erase(matchmaking.begin());//on enlève le premier élément
+        matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
+
+        std::cout << "Game is starting..." << std::endl;
     }
 }

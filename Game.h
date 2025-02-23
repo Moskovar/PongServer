@@ -13,8 +13,9 @@ class Game
 		Player* getOtherPlayer(short id);
 		Player* getP1() { return p1; }
 		Player* getP2() { return p2; }
-		bool isFinished() { return !p1->connected && !p2->connected; }
-		bool allPlayersDisconnected() { return !p1->connected && !p2->connected; }
+		bool isFinished() { return allPlayersDisconnected(); }
+		bool allPlayersDisconnected();
+		bool allPlayersLeftGame();
 
 		void resetBall();
 		void sendBallToPlayersTCP();

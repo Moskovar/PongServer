@@ -41,6 +41,9 @@ public:
 
 	void setAddr(sockaddr_in addr) { this->addr = addr; addrLen = sizeof(this->addr); }
 
+	void leaveGame();
+
+	//--- Envoie TCP ---//
 	void sendVersionTCP(int version);
 	void sendNPSTCP(uti::NetworkPaddleStart ne);
 	void sendNBALLTCP(uti::NetworkBall nball);
@@ -48,7 +51,7 @@ public:
 	void send_NPUDP(SOCKET& udpSocket, Player* pData);
 	void send_BALLUDP(SOCKET udpSocket, Ball* ball);
 
-	bool connected = true;
+	bool connected = true, inGame = false;;
 	vector<char> recvBuffer;
 
 private:

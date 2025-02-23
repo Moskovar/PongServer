@@ -46,8 +46,20 @@ void Player::setSide(short side)
     else { std::cout << "La paddle existe déjà..." << std::endl; }
 }
 
+void Player::leaveGame()
+{
+    inGame = false;
+    if (paddle)
+    {
+        delete paddle;
+        paddle = nullptr;
+    }
+}
+
 void Player::sendVersionTCP(int version)
 {
+    if (!connected) return;//si le joueur n'est pas connecté, on sort
+
     uti::NetworkVersion nv;
 
     // Convertir les valeurs en big-endian avant l'envoi
@@ -59,12 +71,48 @@ void Player::sendVersionTCP(int version)
     int dataSize = sizeof(nv);
     const char* data = reinterpret_cast<const char*>(&nv);
 
-    while (totalSent < dataSize) {
+    const int MAX_RETRIES = 3;
+    int retries = 0;
+
+    while (totalSent < dataSize) 
+    {
+        if (!tcpSocket || *tcpSocket == INVALID_SOCKET) 
+        {
+            std::cerr << "Error: Invalid socket!" << std::endl;
+            return;
+        }
+
         int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
         if (iResult == SOCKET_ERROR)
         {
-            std::cerr << "send failed: " << WSAGetLastError() << std::endl;
+            int error = WSAGetLastError();
+            if (error == WSAEWOULDBLOCK) {
+                // Le socket est temporairement non disponible, réessayer
+                std::cerr << "[sendVersionTCP] Send would block, retrying... (" << retries + 1 << "/" << MAX_RETRIES << ")" << std::endl;
+                retries++;
+
+                if (retries == MAX_RETRIES) {
+                    std::cerr << "[sendVersionTCP] Send failed after multiple retries, closing socket." << std::endl;
+                    closesocket(*tcpSocket);
+                    tcpSocket = nullptr;
+                    return;
+                }
+
+                continue;
+            }
+            else 
+            {
+                std::cerr << "[sendVersionTCP] send failed: " << error << std::endl;
+                closesocket(*tcpSocket);
+                tcpSocket = nullptr; // Éviter un pointeur dangling
+                return;
+            }
+        }
+        else if (iResult == 0) 
+        {
+            std::cerr << "Connection closed by peer." << std::endl;
             closesocket(*tcpSocket);
+            tcpSocket = nullptr; // Éviter l'utilisation d'un pointeur dangling
             return;
         }
         totalSent += iResult;
@@ -73,7 +121,8 @@ void Player::sendVersionTCP(int version)
 
 void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 {
-    std::cout << "NPS SENT: " << nps.header << " : " << nps.gameID << " : " << nps.id << " : " << nps.side << std::endl;
+    if (!connected) return;//si le joueur n'est pas connecté, on sort
+    //std::cout << "NPS SENT: " << nps.header << " : " << nps.gameID << " : " << nps.id << " : " << nps.side << std::endl;
 
     // Convertir les valeurs en big-endian avant l'envoi
     nps.header = htons(nps.header);
@@ -81,29 +130,62 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
     nps.id     = htons(nps.id);
     nps.side   = htons(static_cast<uint16_t>(nps.side));
 
-    std::cout << "NPS SENT RESEAU: " << ntohs(nps.header) << " : " << ntohs(nps.gameID) << " : " << ntohs(nps.id) << " : " << static_cast<short>(ntohs(nps.side)) << std::endl;
-
+    //std::cout << "NPS SENT RESEAU: " << ntohs(nps.header) << " : " << ntohs(nps.gameID) << " : " << ntohs(nps.id) << " : " << static_cast<short>(ntohs(nps.side)) << std::endl;
 
     // Envoi sécurisé des données
     int totalSent = 0;
     int dataSize = sizeof(nps);
     const char* data = reinterpret_cast<const char*>(&nps);
 
+    const int MAX_RETRIES = 3;
+    int retries = 0;
+
     while (totalSent < dataSize) 
     {
-        if (!tcpSocket || *tcpSocket == INVALID_SOCKET) return;
+        if (!tcpSocket || *tcpSocket == INVALID_SOCKET)
+        {
+            std::cerr << "Error: Invalid socket!" << std::endl;
+            return;
+        }
+
         int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
         if (iResult == SOCKET_ERROR)
         {
-            std::cerr << "send failed: " << WSAGetLastError() << std::endl;
+            int error = WSAGetLastError();
+            if (error == WSAEWOULDBLOCK) {
+                // Le socket est temporairement non disponible, réessayer
+                std::cerr << "[sendVersionTCP] Send would block, retrying... (" << retries + 1 << "/" << MAX_RETRIES << ")" << std::endl;
+                retries++;
+
+                if (retries == MAX_RETRIES) {
+                    std::cerr << "[sendVersionTCP] Send failed after multiple retries, closing socket." << std::endl;
+                    closesocket(*tcpSocket);
+                    tcpSocket = nullptr;
+                    return;
+                }
+
+                continue;
+            }
+            else 
+            {
+                std::cerr << "[sendVersionTCP] send failed: " << error << std::endl;
+                closesocket(*tcpSocket);
+                tcpSocket = nullptr; // Éviter un pointeur dangling
+                return;
+            }
+        }
+        else if (iResult == 0) 
+        {
+            std::cerr << "Connection closed by peer." << std::endl;
             closesocket(*tcpSocket);
+            tcpSocket = nullptr; // Éviter l'utilisation d'un pointeur dangling
             return;
         }
+
         totalSent += iResult;
     }
-
-    std::cout << "Size of NetworkPaddleStart: " << sizeof(uti::NetworkPaddleStart) << std::endl;
-    std::cout << "Total sent: " << totalSent << std::endl;
+    //std::cout << "Size of NetworkPaddleStart: " << sizeof(uti::NetworkPaddleStart) << std::endl;
+    //std::cout << "Total sent: " << totalSent << std::endl;
 }
 
 void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
@@ -151,7 +233,8 @@ void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
 
 void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
 {
-    //std::cout << "send_NPUDP" << std::endl;
+    if (!connected || !inGame) return;
+
     if (ball == nullptr)
     {
         std::cout << "ball nullptr" << std::endl;
@@ -184,10 +267,6 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
         std::cerr << "Erreur lors de l'envoi des donnees -> " << WSAGetLastError() << std::endl;
         return;
     }
-    //else
-    //{
-    //    std::cout << "Msg UDP sent : bytesSent: " << bytesSent << std::endl;
-    //}
 }
 
 void Player::sendNBALLTCP(uti::NetworkBall nball)
@@ -206,13 +285,58 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
         nball.velocityZ = htonl(static_cast<int32_t>(nball.velocityZ));
         nball.timestamp = htonl(nball.timestamp);
 
-        std::cout << "BALL SENT: " << (float)(ntohl(nball.x) / 1000.0f) << " : " << (float)(ntohl(nball.z) / 1000.0f) << " : " << (float)(ntohl(nball.velocityX) / 1000.0f) << " : " << (float)(ntohl(nball.velocityZ) / 1000.0f) << " -> " << nball.timestamp << std::endl;
+        //std::cout << "BALL SENT: " << (float)(ntohl(nball.x) / 1000.0f) << " : " << (float)(ntohl(nball.z) / 1000.0f) << " : " << (float)(ntohl(nball.velocityX) / 1000.0f) << " : " << (float)(ntohl(nball.velocityZ) / 1000.0f) << " -> " << nball.timestamp << std::endl;
 
-        int iResult = ::send(*tcpSocket, reinterpret_cast<const char*>(&nball), sizeof(nball), 0);
-        if (iResult == SOCKET_ERROR)
+        // Envoi sécurisé des données
+        int totalSent = 0;
+        int dataSize = sizeof(nball);
+        const char* data = reinterpret_cast<const char*>(&nball);
+
+        const int MAX_RETRIES = 3;
+        int retries = 0;
+
+        while (totalSent < dataSize)
         {
-            std::cerr << "send failed: " << WSAGetLastError() << std::endl;
-            closesocket(*tcpSocket);
+            if (!tcpSocket || *tcpSocket == INVALID_SOCKET)
+            {
+                std::cerr << "Error: Invalid socket!" << std::endl;
+                return;
+            }
+
+            int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+            if (iResult == SOCKET_ERROR)
+            {
+                int error = WSAGetLastError();
+                if (error == WSAEWOULDBLOCK) {
+                    // Le socket est temporairement non disponible, réessayer
+                    std::cerr << "[sendVersionTCP] Send would block, retrying... (" << retries + 1 << "/" << MAX_RETRIES << ")" << std::endl;
+                    retries++;
+
+                    if (retries == MAX_RETRIES) {
+                        std::cerr << "[sendVersionTCP] Send failed after multiple retries, closing socket." << std::endl;
+                        closesocket(*tcpSocket);
+                        tcpSocket = nullptr;
+                        return;
+                    }
+
+                    continue;
+                }
+                else
+                {
+                    std::cerr << "[sendVersionTCP] send failed: " << error << std::endl;
+                    closesocket(*tcpSocket);
+                    tcpSocket = nullptr; // Éviter un pointeur dangling
+                    return;
+                }
+            }
+            else if (iResult == 0)
+            {
+                std::cerr << "Connection closed by peer." << std::endl;
+                closesocket(*tcpSocket);
+                return;
+            }
+
+            totalSent += iResult;
         }
     }
 }

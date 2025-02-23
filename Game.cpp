@@ -22,12 +22,16 @@ Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     {
         p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
         p1->sendNPSTCP(nps2);
+
+        p1->inGame = true;
     }
 
     if(p2)
     {
         p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
         p2->sendNPSTCP(nps1);
+
+        p2->inGame = true;
     }
 
     std::cout << "Game created with ID: " << gameID << std::endl;
@@ -52,6 +56,25 @@ Player* Game::getOtherPlayer(short id)
 {
     if (p1->getID() != id)	return p1;
     else					return p2;
+}
+
+bool Game::allPlayersDisconnected()
+{
+    //return !p1 && !p2 && !p1->connected && !p2->connected && !p1->isSocketValid() && p2->isSocketValid();
+    if (!p1 && !p2) return true;
+    if (!p1)        return !p2->connected;
+    if (!p2)        return !p1->connected;
+
+    return !p1->connected && !p2->connected;
+}
+
+bool Game::allPlayersLeftGame()
+{
+    if (!p1 && !p2) return true;
+    if (!p1)        return !p2->inGame;
+    if (!p2)        return !p1->inGame;
+
+    return !p1->inGame && !p2->inGame;
 }
 
 void Game::resetBall()
@@ -167,7 +190,7 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
     {
         if(isPaddle)
         {
-            std::cout << "COLLISION AVEC PADDLE" << std::endl;
+            //std::cout << "COLLISION AVEC PADDLE" << std::endl;
 
             //---- VelocityX ---//
             ball.turnback();
@@ -184,18 +207,6 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         }
 
         ball.lastElementHit = element;
-
-        //--- Send data ---//
-        //uti::NetworkBall nb = ball.getNball();
-        //p1->sendNBALLTCP(nb);
-        //p2->sendNBALLTCP(nb);
-        //p1->send_BALLUDP(udpSocket, &ball);
-        //p2->send_BALLUDP(udpSocket, &ball);
-
-        //while (distanceBetweenHitboxes(&ball, element) == 0)
-        //{
-        //    ball.move(deltaTime);
-        //}
     }
 }
 
