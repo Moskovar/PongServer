@@ -14,7 +14,7 @@
 
 using namespace std;
 
-#define MAX_PLAYER_NUMBER	100
+#define MAX_PLAYER_NUMBER	1000
 #define MAX_GAME_NUMBER		(MAX_PLAYER_NUMBER/2)
 
 class Server
@@ -33,9 +33,9 @@ class Server
 
 		SOCKET connectionSocket = INVALID_SOCKET;//socket pour recevoir et accepter les connexions des clients
 		SOCKET udpSocket		= INVALID_SOCKET;//socket pour communiquer en UDP
-		std::map<int, Player*>	players;//liste dans laquelle sont placés les nouveaux joueurs dont la connexion a été acceptée -> accès rapide
+		std::map<int, Player>	players;//liste dans laquelle sont placés les nouveaux joueurs dont la connexion a été acceptée -> accès rapide
 		std::vector<Player*>	matchmaking;
-		std::map<int, Game*>	games;
+		std::map<int, Game>	games;
 
 		long long last_timestamp_send_ball = 0;
 

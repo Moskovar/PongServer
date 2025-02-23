@@ -52,6 +52,58 @@ Game::~Game()
     //}
 }
 
+void Game::reset()
+{
+    p1      = nullptr;
+    p2      = nullptr;
+    walls   = nullptr;
+
+    availableInPool = true;
+}
+
+void Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
+{
+    this->p1 = p1;
+    this->p2 = p2;
+
+    this->walls = walls;
+
+    p1->setGameID(gameID);
+    p2->setGameID(gameID);
+
+    p1->setSide(-1);
+    p2->setSide(1);
+
+    uti::NetworkPaddleStart nps1 = p1->getNps();
+    uti::NetworkPaddleStart nps2 = p2->getNps();
+
+    if (p1)
+    {
+        p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
+        p1->sendNPSTCP(nps2);
+
+        p1->inGame = true;
+    }
+
+    if (p2)
+    {
+        p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
+        p2->sendNPSTCP(nps1);
+
+        p2->inGame = true;
+    }
+
+    std::cout << "Game created with ID: " << gameID << std::endl;
+
+    uint64_t now = uti::getCurrentTimestamp();
+
+    game_created_time = now;
+    round_start_time = now;
+    ballSpeed_increase = now;
+
+    availableInPool = false;
+}
+
 Player* Game::getOtherPlayer(short id)
 {
     if (p1->getID() != id)	return p1;

@@ -7,13 +7,19 @@
 class Game
 {
 	public:
+		Game() {}
+		Game(unsigned short id) { this->gameID = gameID; }
 		Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls);
 		~Game();
 
+		void reset();
+		void set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls);
+
 		Player* getOtherPlayer(short id);
-		Player* getP1() { return p1; }
-		Player* getP2() { return p2; }
-		bool isFinished() { return allPlayersDisconnected(); }
+		Player* getP1()					{ return p1;						}
+		Player* getP2()					{ return p2;						}
+		bool isFinished()				{ return allPlayersDisconnected();	}
+		bool isAvailableInPool()		{ return availableInPool;			}
 		bool allPlayersDisconnected();
 		bool allPlayersLeftGame();
 
@@ -27,7 +33,7 @@ class Game
 
 		std::mutex mtx;
 		u_int64 game_created_time = 0, round_start_time = 0, ballSpeed_increase = 0;
-		bool roundStarted = false;
+		bool availableInPool = true, roundStarted = false;
 
 		SOCKET* udpSocket = nullptr;
 

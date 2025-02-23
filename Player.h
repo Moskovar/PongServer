@@ -13,21 +13,29 @@ using namespace std;
 class Player
 {
 public:
-	Player(SOCKET* tcpSocket, short id);
+	Player() {}
+	Player(short id) { this->id = id; }
+	Player(SOCKET* tcpSocket);
 	~Player();
 
-	//--- Données du joueur ---//
-	short getID() { return id; }
-	int getAddrLen() { return addrLen; }
+	void setPlayer(SOCKET* tcpSocket);
+	void resetPlayer();
+	bool isAvailableInPool() { return availableInPool; }//si le joueur dispo dans la pool
 
-	short getGameID()	{ return gameID;	}
-	short getSide()		{ return side;		}
-	uti::NetworkPaddleStart getNps()	{ return { uti::Header::NPS, gameID, id, side }; }
-	uti::NetworkPaddle		getNp()		{ return { uti::Header::NP , gameID, id, (int)(paddle->getZ() * 1000)	  }; }
+	//--- Getters ---//
+	short					getID()			{ return id;															}
+	int						getAddrLen()	{ return addrLen;														}
+	short					getGameID()		{ return gameID;														}
+	short					getSide()		{ return side;															}
+	uti::NetworkPaddleStart getNps()		{ return { uti::Header::NPS, gameID, id, side };						}
+	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle->getZ() * 1000)}; }
 
-	void setGameID(short gameID) { this->gameID = gameID; }
+	//--- Setters ---//
+	void setID(short id)			{ this->id = id;			}
+	void setGameID(short gameID)	{ this->gameID = gameID;	}
+	void setZ(float z)				{ paddle->setZ(z);			}
 	void setSide(short side);//utilisé quand la game est créée, on créée le paddle également
-	void setZ(float z) { paddle->setZ(z); }
+	void setAddr(sockaddr_in addr);
 	
 	//--- Lien entre la communication et le joueur ---//
 	void update(uti::NetworkPaddle& np);
@@ -39,7 +47,6 @@ public:
 	float getPaddleWidth() { return paddleWidth; }
 	Paddle* getPaddle() { return paddle; }
 
-	void setAddr(sockaddr_in addr) { this->addr = addr; addrLen = sizeof(this->addr); }
 
 	void leaveGame();
 
@@ -51,7 +58,8 @@ public:
 	void send_NPUDP(SOCKET& udpSocket, Player* pData);
 	void send_BALLUDP(SOCKET udpSocket, Ball* ball);
 
-	bool connected = true, inGame = false;;
+	bool availableInPool = true;//si l'objet est utilisé pour un joueur dans la pool
+	bool connected = false, inGame = false;
 	vector<char> recvBuffer;
 
 private:

@@ -1,9 +1,8 @@
 #include "Player.h"
 
-Player::Player(SOCKET* tcpSocket, short id)
+Player::Player(SOCKET* tcpSocket)
 {
     this->tcpSocket = tcpSocket;
-    this->id        = id;
 
     //Socket mit en mode non bloquant
     u_long mode = 1;
@@ -28,6 +27,40 @@ Player::~Player()
     cout << "Player cleared !\n" << endl;
 }
 
+void Player::setPlayer(SOCKET* tcpSocket)
+{
+    this->tcpSocket = tcpSocket;
+
+    //Socket mit en mode non bloquant
+    u_long mode = 1;
+    ioctlsocket(*tcpSocket, FIONBIO, &mode);//mode non bloquant
+
+    connected = true;
+    availableInPool = false;
+}
+
+void Player::resetPlayer()
+{
+    if (tcpSocket != nullptr)
+    {
+        closesocket(*tcpSocket);
+        delete tcpSocket;
+        tcpSocket = nullptr;
+    }
+
+    if (paddle)
+    {
+        delete paddle;
+        paddle = nullptr;
+    }
+
+    connected   = false;
+    availableInPool   = true;
+    inGame      = false;
+
+    cout << "Player " << id << " has been reset !\n" << endl;
+}
+
 void Player::update(uti::NetworkPaddle& np)
 {
     //this->z = (float)(np.z / 1000.0f);
@@ -44,6 +77,12 @@ void Player::setSide(short side)
         else if (side ==  1) paddle = new Paddle(glm::vec3( 70.0f, 0.0f, 0.0f));
     }
     else { std::cout << "La paddle existe déjà..." << std::endl; }
+}
+
+void Player::setAddr(sockaddr_in addr)
+{
+    this->addr  = addr;
+    addrLen     = sizeof(this->addr);
 }
 
 void Player::leaveGame()
