@@ -59,7 +59,7 @@ void Game::reset()
     walls       = nullptr;
     lastWinner  = nullptr;
 
-    ball.reset();
+    //on reset la position de la balle dans le set, au moment d'envoyer les données de positions de la balle aux joueurs
     ball.moveSpeed = 25;
     
     roundStarted    = false;
@@ -88,6 +88,8 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     p1->setSide(-1);
     p2->setSide(1);
 
+    resetBall();
+
     uti::NetworkPaddleStart nps1 = p1->getNps();
     uti::NetworkPaddleStart nps2 = p2->getNps();
 
@@ -101,10 +103,6 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 
     p2->inGame = true;
 
-    //p1->getPaddle().setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
-    //p2->getPaddle().setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
-
-
     std::cout << "Game created with ID: " << gameID << std::endl;
 
     uint64_t now = uti::getCurrentTimestamp();
@@ -114,6 +112,8 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     ballSpeed_increase = now;
 
     availableInPool = false;
+
+    std::cout << "BALL POSITION: " << ball.getX() << std::endl;
 
     return true;
 }
