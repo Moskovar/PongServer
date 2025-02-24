@@ -1,48 +1,6 @@
 #include "Game.h"
 #include <chrono>
 
-Game::Game(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
-{
-    this->gameID = gameID;
-    this->p1 = p1;
-    this->p2 = p2;
-
-    this->walls = walls;
-
-    p1->setGameID(gameID);
-    p2->setGameID(gameID);
-
-    p1->setSide(-1);
-    p2->setSide(1);
-
-    uti::NetworkPaddleStart nps1 = p1->getNps();
-    uti::NetworkPaddleStart nps2 = p2->getNps();
-
-    if(p1)
-    {
-        p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
-        p1->sendNPSTCP(nps2);
-
-        p1->inGame = true;
-    }
-
-    if(p2)
-    {
-        p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
-        p2->sendNPSTCP(nps1);
-
-        p2->inGame = true;
-    }
-
-    std::cout << "Game created with ID: " << gameID << std::endl;
-
-    uint64_t now = uti::getCurrentTimestamp();
-
-    game_created_time   = now;
-    round_start_time    = now;
-    ballSpeed_increase  = now;
-}
-
 Game::~Game()
 {
     //if (ball)
@@ -107,13 +65,11 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 
     uint64_t now = uti::getCurrentTimestamp();
 
-    game_created_time = now;
-    round_start_time = now;
-    ballSpeed_increase = now;
+    setGame_created_time(now);
+    setRound_start_time(now);
+    setBallSpeed_increase_time(now);
 
     availableInPool = false;
-
-    std::cout << "BALL POSITION: " << ball.getX() << std::endl;
 
     return true;
 }
@@ -124,6 +80,42 @@ Player* Game::getOtherPlayer(short id)
     else					return p2;
 }
 
+u_int64 Game::getGame_created_time()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return game_created_time;
+}
+
+u_int64 Game::getRound_start_time()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return round_start_time;
+}
+
+u_int64 Game::getBallSpeed_increase_time()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return ballSpeed_increase;
+}
+
+void Game::setGame_created_time(u_int64 time)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    game_created_time = time;
+}
+
+void Game::setRound_start_time(u_int64 time)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    round_start_time = time;
+}
+
+void Game::setBallSpeed_increase_time(u_int64 time)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    ballSpeed_increase = time;
+}
+
 bool Game::allPlayersDisconnected()
 {
     //return !p1 && !p2 && !p1->connected && !p2->connected && !p1->isSocketValid() && p2->isSocketValid();
@@ -131,7 +123,10 @@ bool Game::allPlayersDisconnected()
     if (!p1)        return !p2->connected;
     if (!p2)        return !p1->connected;
 
-    return !p1->connected && !p2->connected;
+    if (p1->connected) return false;
+    if (p2->connected) return false;
+
+    return true;
 }
 
 bool Game::allPlayersLeftGame()
@@ -140,7 +135,10 @@ bool Game::allPlayersLeftGame()
     if (!p1)        return !p2->inGame;
     if (!p2)        return !p1->inGame;
 
-    return !p1->inGame && !p2->inGame;
+    if (p1->inGame) return false;
+    if (p2->inGame) return false;
+
+    return true;
 }
 
 void Game::resetBall()
@@ -194,9 +192,9 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
     short isPaddle = true;//pour vérifier le type d'Element, plus rapide qu'un dynamic cast ?
 
     //Augmentation de la vitesse en fonction du temps
-    if ((uti::getCurrentTimestamp() - ballSpeed_increase) >= 1)
+    if ((uti::getCurrentTimestamp() - getBallSpeed_increase_time()) >= 1)
     {
-        ballSpeed_increase = uti::getCurrentTimestamp();
+        setBallSpeed_increase_time(uti::getCurrentTimestamp());
         increaseBallSpeed();
     }
 

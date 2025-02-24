@@ -381,6 +381,8 @@ void Server::listen_clientsUDP()
             np.z = static_cast<int32_t>(ntohl(np.z));
             //if(np.id == 0) std::cout << "Received: " << np.gameID << " : " << np.id << " : " << (float)(np.z / 1000.0f) << std::endl;
 
+            //std::cout << "DATA: " << players[np.id].availableInPool << " : " << games[np.gameID].availableInPool << std::endl;
+
             if (!players[np.id].availableInPool && !games[np.gameID].availableInPool)
             {
                 //std::cout << "MSG sent to players in the game: " << np.gameID << std::endl;
@@ -447,7 +449,7 @@ void Server::run_games()
                 if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
                     game.sendBallToPlayersUDP(udpSocket);
             }
-            else if (!game.roundStarted && uti::getCurrentTimestamp() - game.round_start_time >= 3)//si la game n'a pas démarré
+            else if (!game.roundStarted && uti::getCurrentTimestamp() - game.getRound_start_time() >= 3)//si la game n'a pas démarré
             {
                 game.startRound(udpSocket);
             }
@@ -502,6 +504,7 @@ void Server::run_matchmaking()
             matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
 
             std::cout << "Game is starting..." << std::endl;
+            std::cout << "availableInPool" << " -> " << games[gameID].availableInPool << std::endl;
         }
         else
         {
