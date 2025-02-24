@@ -318,10 +318,10 @@ void Server::listen_clientsTCP()
                 }
                 else if (iResult == 0 || iResult == SOCKET_ERROR) 
                 {
-                    if (!p.connected) continue;
+                    //if (!p.connected) continue;
                     //cout << "ERROR: " << WSAGetLastError() << " : " << iResult << endl;
 
-                    p.connected = false;
+                    p.resetPlayer();
 
                     std::cout << "A client has been disconnected ID: " << p.getID() << std::endl;
 
@@ -345,13 +345,6 @@ void Server::listen_clientsUDP()
     {
         FD_ZERO(&readfds);
         FD_SET(udpSocket, &readfds);
-
-        // Vérifiez si le fd_set est vide
-        if (readfds.fd_count == 0) {//A ENLEVER
-            // Aucun socket à surveiller, attendez un peu avant de réessayer
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            continue;
-        }
 
         timeout.tv_sec = 1;  // 1 seconde de timeout
         timeout.tv_usec = 0;

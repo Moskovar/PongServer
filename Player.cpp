@@ -62,14 +62,33 @@ void Player::resetPlayer()
 
 void Player::update(uti::NetworkPaddle& np)
 {
-    //this->z = (float)(np.z / 1000.0f);
+    std::lock_guard<std::mutex> lock(mtx_paddle);
     this->paddle.setZ((float)(np.z / 1000.0f));
+}
+
+SOCKET* Player::getTCPSocket()
+{
+    std::lock_guard<std::mutex> lock(mtx_socket);
+    return tcpSocket;
+}
+
+bool Player::isSocketValid()
+{
+    std::lock_guard<std::mutex> lock(mtx_socket);
+    return tcpSocket && *tcpSocket != INVALID_SOCKET;
+}
+
+void Player::setZ(float z)
+{
+    std::lock_guard<std::mutex> lock(mtx_paddle);
+    paddle.setZ(z);
 }
 
 void Player::setSide(short side)
 {
     this->side = side;
 
+    std::lock_guard<std::mutex> lock(mtx_paddle);
     if      (side == -1) paddle.setPosition(glm::vec3(-70.0f, 0.0f, 0.0f));
     else if (side ==  1) paddle.setPosition(glm::vec3( 70.0f, 0.0f, 0.0f));
     //else { std::cout << "La paddle existe deja..." << std::endl; }
@@ -286,7 +305,7 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
     nb.velocityX    = htonl(nb.velocityX);
     nb.velocityZ    = htonl(nb.velocityZ);
     nb.speed        = htons(nb.speed);
-    nb.timestamp    = htonl(ball->timestamp);
+    nb.timestamp    = htonl(ball->getTimestamp());
 
     //std::cout << "BALL SENT: " << ntohl(nb.timestamp) << std::endl;
 

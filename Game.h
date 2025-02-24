@@ -31,7 +31,7 @@ class Game
 		void increaseBallSpeed();
 		void run(SOCKET& udpSocket, float deltaTime);
 
-		std::mutex mtx;
+		std::mutex mtx_ball;
 		u_int64 game_created_time = 0, round_start_time = 0, ballSpeed_increase = 0;
 		bool availableInPool = true, roundStarted = false;
 

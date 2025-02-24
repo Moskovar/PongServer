@@ -60,7 +60,7 @@ void Game::reset()
     lastWinner  = nullptr;
 
     //on reset la position de la balle dans le set, au moment d'envoyer les données de positions de la balle aux joueurs
-    ball.moveSpeed = 25;
+    ball.setMoveSpeed(25);
     
     roundStarted    = false;
     availableInPool = true;
@@ -152,7 +152,7 @@ void Game::resetBall()
 void Game::sendBallToPlayersTCP()
 {
     uti::NetworkBall nball = ball.getNball();
-    nball.timestamp = ball.timestamp;
+    nball.timestamp = ball.getTimestamp();
 
     p1->sendNBALLTCP(nball);
     p2->sendNBALLTCP(nball);
@@ -200,26 +200,29 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         increaseBallSpeed();
     }
 
-    if (ball.velocityX < 0 && p1)
+    float velocityX = ball.getVelocityX(),
+          ballX     = ball.getX();
+
+    if (velocityX < 0 && p1)
     {
         element = p1->getPPaddle();
 
         if (!element) return;
 
-        if (ball.getX() < element->getX() - 10)
+        if (ballX < element->getX() - 10)
         {
             std::cout << "OUT!" << std::endl;
             resetRound();
             lastWinner = p2;
         }
     }
-    else if (ball.velocityX > 0 && p2)
+    else if (velocityX > 0 && p2)
     {
         element = p2->getPPaddle();
 
         if (!element) return;
 
-        if (ball.getX() > element->getX() + 10)
+        if (ballX > element->getX() + 10)
         {
             std::cout << "OUT!" << std::endl;
             resetRound();
@@ -269,11 +272,11 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             float velocityZ = (ball.getZ() - element->getZ()) / (static_cast<Paddle*>(element)->width / 2);
 
 
-            ball.velocityZ = velocityZ;
+            ball.setVelocityZ(velocityZ);
         }
         else
         {
-            ball.velocityZ = -ball.velocityZ;
+            ball.setVelocityZ(-ball.getVelocityZ());
         }
 
         ball.lastElementHit = element;
