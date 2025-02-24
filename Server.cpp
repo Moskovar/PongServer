@@ -383,7 +383,7 @@ void Server::listen_clientsUDP()
 
             //std::cout << "DATA: " << players[np.id].availableInPool << " : " << games[np.gameID].availableInPool << std::endl;
 
-            if (!players[np.id].availableInPool && !games[np.gameID].availableInPool)
+            if (!players[np.id].availableInPool && !games[np.gameID].isAvailableInPool())
             {
                 //std::cout << "MSG sent to players in the game: " << np.gameID << std::endl;
 
@@ -416,18 +416,20 @@ void Server::run_games()
             last_timestamp_send_ball = uti::getCurrentTimestampMs();
 
         std::lock_guard<std::mutex> lock_players(mtx_players);
-        std::lock_guard<std::mutex> lock_games(mtx_games);
+        //std::lock_guard<std::mutex> lock_games(mtx_games);
         for (auto it = games.begin(); it != games.end(); ++it)
         {
             Game& game = it->second;
 
-            if (game.availableInPool) continue;
+            bool isGameAvailableInPool = game.isAvailableInPool();
+
+            if (isGameAvailableInPool) continue;
 
             //std::cout << "P1 DC: "  << !it->second->getP1()->connected << std::endl;
             //std::cout << "P2 DC: "  << !it->second->getP2()->connected << std::endl;
             //std::cout << "ALL DC: " <<  it->second->allPlayersDisconnected() << std::endl;
 
-            if (!game.availableInPool && (game.allPlayersDisconnected() || game.allPlayersLeftGame()))
+            if (!isGameAvailableInPool && (game.allPlayersDisconnected() || game.allPlayersLeftGame()))
             {
                 Player* p1 = game.getP1();
                 if (p1) p1->inGame = false;
@@ -436,20 +438,21 @@ void Server::run_games()
                 if (p2) p2->inGame = false;
 
                 game.reset();
-                //it = games.erase(it);
 
                 std::cout << "A game has been finished from all players disconnected ..." << std::endl;
 
                 continue;
             }
 
-            if (game.roundStarted)//Si la game a démarré, on la joue
+            bool roundStarted = game.isRoundStarted();
+
+            if (roundStarted)//Si la game a démarré, on la joue
             {
                 game.run(udpSocket, deltaTime.count());
                 if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
                     game.sendBallToPlayersUDP(udpSocket);
             }
-            else if (!game.roundStarted && uti::getCurrentTimestamp() - game.getRound_start_time() >= 3)//si la game n'a pas démarré
+            else if (!roundStarted && uti::getCurrentTimestamp() - game.getRound_start_time() >= 3)//si la game n'a pas démarré
             {
                 game.startRound(udpSocket);
             }
@@ -482,12 +485,9 @@ void Server::run_matchmaking()
         Player* p1 = matchmaking[0];
         Player* p2 = matchmaking[1];
 
-        if (!p1) std::cout << "P1 NULLPTR" << std::endl;
-        if (!p2) std::cout << "P2 NULLPTR" << std::endl;
-
         for (int i = 0; i < MAX_GAME_NUMBER; i++)
         {
-            if (games[i].availableInPool) //si on trouve un trou, on met id à i et on sort de la boucle
+            if (games[i].isAvailableInPool()) //si on trouve un trou, on met id à i et on sort de la boucle
             { 
                 gameID = i; 
                 break; 
@@ -496,7 +496,7 @@ void Server::run_matchmaking()
 
         if (gameID == -1) continue;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
 
-        mtx_games.lock();
+        //mtx_games.lock();
 
         if (games[gameID].set(gameID, p1, p2, &walls))
         {
@@ -504,12 +504,12 @@ void Server::run_matchmaking()
             matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
 
             std::cout << "Game is starting..." << std::endl;
-            std::cout << "availableInPool" << " -> " << games[gameID].availableInPool << std::endl;
+            //std::cout << "availableInPool" << " -> " << games[gameID].availableInPool << std::endl;
         }
         else
         {
             std::cout << "Can't start the game, P1 or P2 nullptr!" << std::endl;
         }
-        mtx_games.unlock();
+        //mtx_games.unlock();
     }
 }

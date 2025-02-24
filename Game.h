@@ -17,7 +17,16 @@ class Game
 		Player* getP1()					{ return p1;						}
 		Player* getP2()					{ return p2;						}
 
+		//--- Gestion des états ---//
+
+		bool isAvailableInPool();
+		bool isRoundStarted();
+
+		void setAvailableInPool(bool state);
+		void setRoundStarted(bool state);
+		
 		//--- Gestion du temps ---//
+
 		u_int64 getGame_created_time();
 		u_int64 getRound_start_time();
 		u_int64 getBallSpeed_increase_time();
@@ -27,8 +36,6 @@ class Game
 		void setBallSpeed_increase_time(u_int64 time);
 
 
-		bool isFinished()				{ return allPlayersDisconnected();	}
-		bool isAvailableInPool()		{ return availableInPool;			}
 		bool allPlayersDisconnected();
 		bool allPlayersLeftGame();
 
@@ -40,16 +47,16 @@ class Game
 		void increaseBallSpeed();
 		void run(SOCKET& udpSocket, float deltaTime);
 
-		bool availableInPool = true, roundStarted = false;
+		
 		
 
 		SOCKET* udpSocket = nullptr;
 
 	private:
-		//--- Gestion des états ---//
+		//--- Gestion des états et du temps ---//
 		std::mutex mtx_states;
-		
-		u_int64 game_created_time = 0, round_start_time = 0, ballSpeed_increase = 0;
+		bool availableInPool = true, roundStarted = false;
+		u_int64 game_created_time = 0, round_start_time	= 0, ballSpeed_increase = 0;
 
 		//--- Gestion de la balle ---//
 		std::mutex mtx_ball;

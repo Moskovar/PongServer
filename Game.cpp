@@ -80,6 +80,30 @@ Player* Game::getOtherPlayer(short id)
     else					return p2;
 }
 
+bool Game::isAvailableInPool()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return availableInPool;
+}
+
+bool Game::isRoundStarted()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return roundStarted;
+}
+
+void Game::setAvailableInPool(bool state)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    availableInPool = state;
+}
+
+void Game::setRoundStarted(bool state)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    roundStarted = state;
+}
+
 u_int64 Game::getGame_created_time()
 {
     std::lock_guard<std::mutex> lock(mtx_states);
