@@ -16,6 +16,12 @@ void Element::setZ(float z)
 	//std::cout << "Nouvelle pos: " << position.x << " : " << position.y << " : " << position.z << std::endl;
 }
 
+void Element::setPosition(glm::vec3 position)
+{
+	this->position = position;
+	updateModelMatrixFromPosition();
+}
+
 void Element::updateModelMatrixFromPosition()
 {
 	this->modelMatrix[3].x = this->position.x;

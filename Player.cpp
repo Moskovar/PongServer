@@ -18,11 +18,11 @@ Player::~Player()
 		tcpSocket = nullptr;
 	}
 
-    if (paddle)
-    {
-        delete paddle;
-        paddle = nullptr;
-    }
+    //if (paddle)
+    //{
+    //    delete paddle;
+    //    paddle = nullptr;
+    //}
 
     cout << "Player cleared !\n" << endl;
 }
@@ -35,8 +35,10 @@ void Player::setPlayer(SOCKET* tcpSocket)
     u_long mode = 1;
     ioctlsocket(*tcpSocket, FIONBIO, &mode);//mode non bloquant
 
-    connected = true;
+    connected       = true;
     availableInPool = false;
+    inGame          = false;
+    inMatchmaking   = false;
 }
 
 void Player::resetPlayer()
@@ -48,15 +50,12 @@ void Player::resetPlayer()
         tcpSocket = nullptr;
     }
 
-    if (paddle)
-    {
-        delete paddle;
-        paddle = nullptr;
-    }
+    paddle.setPosition(glm::vec3(0.0, 0.0, 0.0));
 
-    connected   = false;
-    availableInPool   = true;
-    inGame      = false;
+    availableInPool = true;
+    connected       = false;
+    inGame          = false;
+    inMatchmaking   = false;
 
     cout << "Player " << id << " has been reset !\n" << endl;
 }
@@ -64,19 +63,16 @@ void Player::resetPlayer()
 void Player::update(uti::NetworkPaddle& np)
 {
     //this->z = (float)(np.z / 1000.0f);
-    this->paddle->setZ((float)(np.z / 1000.0f));
+    this->paddle.setZ((float)(np.z / 1000.0f));
 }
 
 void Player::setSide(short side)
 {
     this->side = side;
 
-    if (!paddle)
-    {
-        if      (side == -1) paddle = new Paddle(glm::vec3(-70.0f, 0.0f, 0.0f));
-        else if (side ==  1) paddle = new Paddle(glm::vec3( 70.0f, 0.0f, 0.0f));
-    }
-    else { std::cout << "La paddle existe déjà..." << std::endl; }
+    if      (side == -1) paddle.setPosition(glm::vec3(-70.0f, 0.0f, 0.0f));
+    else if (side ==  1) paddle.setPosition(glm::vec3( 70.0f, 0.0f, 0.0f));
+    //else { std::cout << "La paddle existe deja..." << std::endl; }
 }
 
 void Player::setAddr(sockaddr_in addr)
@@ -87,12 +83,8 @@ void Player::setAddr(sockaddr_in addr)
 
 void Player::leaveGame()
 {
-    inGame = false;
-    if (paddle)
-    {
-        delete paddle;
-        paddle = nullptr;
-    }
+    inGame          = false;
+    inMatchmaking   = false;
 }
 
 void Player::sendVersionTCP(int version)

@@ -39,6 +39,7 @@ void Ball::reset()
 	position	= glm::vec3(0.0f, 0.0f, 0.0f);
 	velocityX	= 0.0f;
 	velocityZ	= 0.0f;
+
 	//moveSpeed	= 50.0f;
 }
 

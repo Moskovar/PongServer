@@ -212,8 +212,6 @@ void Server::listen_clientsTCP()
             {
                 p.resetPlayer();//libère le joueur dans la pool
 
-                //it = players.erase(it);//si le pointeur est nullptr, on supprime le player de la liste des joueurs
-
                 std::cout << "Player " << p.getID() << " disconnected ..." << std::endl;
                 continue;
             }
@@ -224,6 +222,7 @@ void Server::listen_clientsTCP()
         }
         lock.unlock();//unlock manuellement pour éviter les 100ms de pause après
 
+        //--- A DELETE
         // Vérifiez si le fd_set est vide
         if (readfds.fd_count == 0) 
         {
@@ -242,7 +241,7 @@ void Server::listen_clientsTCP()
         }
 
         std::lock_guard<std::mutex> lock_players(mtx_players);
-        for (auto it = players.begin(); it != players.end();) 
+        for (auto it = players.begin(); it != players.end(); ++it) 
         {
             Player& p = it->second;
 
@@ -324,12 +323,11 @@ void Server::listen_clientsTCP()
 
                     p.connected = false;
 
-                    std::cout << "A client has been disconnected, " << players.size() << " left" << std::endl;
+                    std::cout << "A client has been disconnected ID: " << p.getID() << std::endl;
 
                     continue;
                 }
             }
-            ++it;
         }
     }
 
@@ -349,7 +347,7 @@ void Server::listen_clientsUDP()
         FD_SET(udpSocket, &readfds);
 
         // Vérifiez si le fd_set est vide
-        if (readfds.fd_count == 0) {
+        if (readfds.fd_count == 0) {//A ENLEVER
             // Aucun socket à surveiller, attendez un peu avant de réessayer
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
@@ -489,6 +487,9 @@ void Server::run_matchmaking()
         Player* p1 = matchmaking[0];
         Player* p2 = matchmaking[1];
 
+        if (!p1) std::cout << "P1 NULLPTR" << std::endl;
+        if (!p2) std::cout << "P2 NULLPTR" << std::endl;
+
         for (int i = 0; i < MAX_GAME_NUMBER; i++)
         {
             if (games[i].availableInPool) //si on trouve un trou, on met id à i et on sort de la boucle
@@ -500,13 +501,19 @@ void Server::run_matchmaking()
 
         if (gameID == -1) continue;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
 
-        matchmaking.erase(matchmaking.begin());//on enlève le premier élément
-        matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
-
         mtx_games.lock();
-        games[gameID].set(gameID, p1, p2, &walls);
-        mtx_games.unlock();
 
-        std::cout << "Game is starting..." << std::endl;
+        if (games[gameID].set(gameID, p1, p2, &walls))
+        {
+            matchmaking.erase(matchmaking.begin());//on enlève le premier élément
+            matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
+
+            std::cout << "Game is starting..." << std::endl;
+        }
+        else
+        {
+            std::cout << "Can't start the game, P1 or P2 nullptr!" << std::endl;
+        }
+        mtx_games.unlock();
     }
 }

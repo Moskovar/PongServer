@@ -4,6 +4,7 @@
 class Paddle : public Element
 {
 	public:
+		Paddle() {}
 		Paddle(glm::vec3 position);
 
 		//--- Hard value ---//

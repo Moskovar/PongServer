@@ -13,7 +13,7 @@ class Game
 		~Game();
 
 		void reset();
-		void set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls);
+		bool set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls);
 
 		Player* getOtherPlayer(short id);
 		Player* getP1()					{ return p1;						}

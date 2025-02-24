@@ -28,12 +28,12 @@ public:
 	short					getGameID()		{ return gameID;														}
 	short					getSide()		{ return side;															}
 	uti::NetworkPaddleStart getNps()		{ return { uti::Header::NPS, gameID, id, side };						}
-	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle->getZ() * 1000)}; }
+	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle.getZ() * 1000)}; }
 
 	//--- Setters ---//
 	void setID(short id)			{ this->id = id;			}
 	void setGameID(short gameID)	{ this->gameID = gameID;	}
-	void setZ(float z)				{ paddle->setZ(z);			}
+	void setZ(float z)				{ paddle.setZ(z);			}
 	void setSide(short side);//utilisé quand la game est créée, on créée le paddle également
 	void setAddr(sockaddr_in addr);
 	
@@ -45,7 +45,8 @@ public:
 	sockaddr_in* getPAddr() { return &addr; }
 	bool isSocketValid() { return tcpSocket && *tcpSocket != INVALID_SOCKET; }
 	float getPaddleWidth() { return paddleWidth; }
-	Paddle* getPaddle() { return paddle; }
+	Paddle  getPaddle()  { return paddle; }
+	Paddle* getPPaddle() { return &paddle; }
 
 
 	void leaveGame();
@@ -58,21 +59,23 @@ public:
 	void send_NPUDP(SOCKET& udpSocket, Player* pData);
 	void send_BALLUDP(SOCKET udpSocket, Ball* ball);
 
-	bool availableInPool = true;//si l'objet est utilisé pour un joueur dans la pool
-	bool connected = false, inGame = false, inMatchmaking = false;
+	bool availableInPool = true,//si l'objet est utilisé pour un joueur dans la pool
+	     connected		 = false, inGame = false, inMatchmaking = false;
 	vector<char> recvBuffer;
 
 private:
 	SOCKET* tcpSocket = nullptr;
 	sockaddr_in addr = {};
-	int	  addrLen	= 0;
+
+	int	  addrLen	=  0;
 	short	gameID	= -1,//-1 = pas de game
-			id		=  0;
-	float z = 0.0f, paddleWidth = 10.2f;
-	Paddle* paddle = nullptr;
+			id		=  0,
+	    	side	=  0;
+
+	Paddle paddle;
+	float paddleWidth = 10.2f;
 
 	//Pong
-	short side = 0;
 
 	std::chrono::steady_clock::time_point prevTime;//pour calculer le deltatime
 };

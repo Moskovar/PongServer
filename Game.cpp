@@ -54,22 +54,33 @@ Game::~Game()
 
 void Game::reset()
 {
-    p1      = nullptr;
-    p2      = nullptr;
-    walls   = nullptr;
+    p1          = nullptr;
+    p2          = nullptr;
+    walls       = nullptr;
+    lastWinner  = nullptr;
 
     ball.reset();
     ball.moveSpeed = 25;
-
+    
+    roundStarted    = false;
     availableInPool = true;
 }
 
-void Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
+bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 {
+    this->gameID = gameID;
+
     this->p1 = p1;
     this->p2 = p2;
 
+    if (!p1 || !p2) return false;
+
     this->walls = walls;
+
+    //ball.setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
+
+    p1->inMatchmaking = false;
+    p2->inMatchmaking = false;
 
     p1->setGameID(gameID);
     p2->setGameID(gameID);
@@ -80,21 +91,19 @@ void Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     uti::NetworkPaddleStart nps1 = p1->getNps();
     uti::NetworkPaddleStart nps2 = p2->getNps();
 
-    if (p1)
-    {
-        p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
-        p1->sendNPSTCP(nps2);
+    p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
+    p1->sendNPSTCP(nps2);
 
-        p1->inGame = true;
-    }
+    p1->inGame = true;
 
-    if (p2)
-    {
-        p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
-        p2->sendNPSTCP(nps1);
+    p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
+    p2->sendNPSTCP(nps1);
 
-        p2->inGame = true;
-    }
+    p2->inGame = true;
+
+    //p1->getPaddle().setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
+    //p2->getPaddle().setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
+
 
     std::cout << "Game created with ID: " << gameID << std::endl;
 
@@ -105,6 +114,8 @@ void Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     ballSpeed_increase = now;
 
     availableInPool = false;
+
+    return true;
 }
 
 Player* Game::getOtherPlayer(short id)
@@ -191,7 +202,7 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
 
     if (ball.velocityX < 0 && p1)
     {
-        element = p1->getPaddle();
+        element = p1->getPPaddle();
 
         if (!element) return;
 
@@ -204,7 +215,7 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
     }
     else if (ball.velocityX > 0 && p2)
     {
-        element = p2->getPaddle();
+        element = p2->getPPaddle();
 
         if (!element) return;
 
@@ -215,7 +226,11 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             lastWinner = p1;
         }
     }
-    //else return;
+    else
+    {
+        std::cout << "Paddle Element Nullptr!" << std::endl;
+        return;
+    }
 
     distance = distanceBetweenHitboxes(&ball, element);
 
@@ -271,7 +286,17 @@ float Game::distanceBetweenHitboxes(Element* e1, Element* e2)
    float distanceY = 0.0f;
    float distanceZ = 0.0f;
 
-   if (!e1 || !e2) std::cout << "E1 OR E2 NULLPTR !!!!" << std::endl;
+   if (!e1)
+   {
+       std::cout << "E1 NULLPTR !!!!" << std::endl;
+       return 1000.0f;
+   }
+
+   if (!e2)
+   {
+       std::cout << "E2 NULLPTR !!!!" << std::endl;
+       return 1000.0f;
+   }
 
     glm::vec3 e1_maxPoint = e1->getRHitbox().maxPoint;
     glm::vec3 e1_minPoint = e1->getRHitbox().minPoint;

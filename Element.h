@@ -6,6 +6,7 @@
 class Element
 {
 	public:
+		Element() {}
 		Element(glm::vec3 position);
 
 		float getX() { return position.x; }
@@ -14,6 +15,7 @@ class Element
 		uti::OBB& getRHitbox() { return hitbox; }
 
 		void setZ(float z);
+		void setPosition(glm::vec3 position);
 		void updateModelMatrixFromPosition();
 		void setMinMaxPoints(glm::vec3 minPoint, glm::vec3 maxPoint);
 
