@@ -59,7 +59,7 @@ public:
 	void send_BALLUDP(SOCKET udpSocket, Ball* ball);
 
 	bool availableInPool = true;//si l'objet est utilisé pour un joueur dans la pool
-	bool connected = false, inGame = false;
+	bool connected = false, inGame = false, inMatchmaking = false;
 	vector<char> recvBuffer;
 
 private:

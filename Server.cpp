@@ -287,30 +287,14 @@ void Server::listen_clientsTCP()
                             else if (header == uti::Header::MATCHMAKING)
                             {
                                 std::cout << "Demande de matchmaking received!" << std::endl;
-                                bool found = false;
-                                int i = -1;
+                                //std::lock_guard<std::mutex> lock(mtx_players);
 
-                                for (Player* player : matchmaking)
-                                {
-                                    ++i;
-                                    if (&p == player)
-                                    {
-                                        found = true;
-                                        break;
-                                    }
-                                }
+                                p.inMatchmaking = !p.inMatchmaking;
 
-                                std::lock_guard<std::mutex> lock_mm(mtx_matchmaking);
-                                if (!found)
+                                if (p.inMatchmaking)
                                 {
                                     matchmaking.push_back(&p);
-                                    std::cout << "Un joueur a rejoint le matchmaking... " << matchmaking.size() << " actuellement dans le matchmaking" << std::endl;
-                                }
-                                else
-                                {
-                                    std::cout << "i = " << i << std::endl;
-                                    matchmaking.erase(matchmaking.begin() + i);
-                                    std::cout << "Un joueur a leave le matchmaking... " << matchmaking.size() << " actuellement dans le matchmaking" << std::endl;
+                                    std::cout << "New player in matchmaking, now in -> " << matchmaking.size() << std::endl;
                                 }
                             }
                             else if (header == uti::Header::STATE)
@@ -320,6 +304,8 @@ void Server::listen_clientsTCP()
 
                                 nst.header = ntohs(nst.header);
                                 nst.inGame = ntohs(nst.inGame);
+
+                                p.inGame = nst.inGame;
 
                                 std::cout << "STATE RECEIVED: " << nst.header << " : " << nst.inGame << std::endl;
                             }
@@ -488,21 +474,20 @@ void Server::run_matchmaking()
         std::unique_lock<std::mutex> lock_mm(mtx_matchmaking);//attention à l'ordre de lock
         std::unique_lock<std::mutex> lock_players(mtx_players);//doit tjrs être lock dans le même ordre
 
-        int nb_players = matchmaking.size();
+        matchmaking.erase(
+            std::remove_if(matchmaking.begin(), matchmaking.end(), [](Player* p) 
+                { 
+                    return !p || p->availableInPool || !p->connected || p->inGame;
+                }),
+            matchmaking.end()
+        );
 
-        if (nb_players < 2) continue;//s'il y a moins de 2 joueurs dans le matchmaking on skip
+        if (matchmaking.size() < 2) continue;//s'il y a moins de 2 joueurs dans le matchmaking on skip
 
         int gameID = -1;
 
         Player* p1 = matchmaking[0];
         Player* p2 = matchmaking[1];
-
-        if (!p1 || !p1->connected || !p1->isSocketValid())//si le joueur est déconnecté, on l'enlève du matchmaking et on recommence la boucle
-        {
-            matchmaking.erase(matchmaking.begin());
-            std::cout << "A player left the matchmaking ! Players waiting for a game: " << matchmaking.size() << std::endl;
-            continue;
-        }
 
         for (int i = 0; i < MAX_GAME_NUMBER; i++)
         {
@@ -515,13 +500,12 @@ void Server::run_matchmaking()
 
         if (gameID == -1) continue;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
 
+        matchmaking.erase(matchmaking.begin());//on enlève le premier élément
+        matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
+
         mtx_games.lock();
         games[gameID].set(gameID, p1, p2, &walls);
         mtx_games.unlock();
-
-
-        matchmaking.erase(matchmaking.begin());//on enlève le premier élément
-        matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
 
         std::cout << "Game is starting..." << std::endl;
     }

@@ -58,6 +58,9 @@ void Game::reset()
     p2      = nullptr;
     walls   = nullptr;
 
+    ball.reset();
+    ball.moveSpeed = 25;
+
     availableInPool = true;
 }
 
