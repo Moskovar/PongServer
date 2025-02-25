@@ -8,6 +8,7 @@
 #include "Ball.h"
 #include <mutex>
 #include <atomic>
+#include <shared_mutex>
 //#include <ws2tcpip.h>
 
 using namespace std;
@@ -37,7 +38,7 @@ public:
 
 	int						getAddrLen()	{ return addrLen;														}
 	uti::NetworkPaddleStart getNps()		{ return { uti::Header::NPS, gameID, id, side };						}
-	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle.getZ() * 1000)}; }
+	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle.getZ() * 1000)};  }//protéger le getZ
 
 	//--- Setters ---//
 	//Paddle protégé par mtx_paddle
@@ -54,6 +55,7 @@ public:
 	SOCKET* getTCPSocket();
 	sockaddr_in* getPAddr() { return &addr; }
 	bool isSocketValid();
+	void closeSocket();
 	float getPaddleWidth() { return paddleWidth; }
 	Paddle  getPaddle()  { return paddle; }
 	Paddle* getPPaddle() { return &paddle; }
@@ -78,10 +80,11 @@ public:
 		, side	 = 0;//est modifié lors de la création d'une game et c'est tout ?!
 	//std::atomic<short> gameID{ -1 }, id{ 0 }, side { 0 };
 
-	std::mutex mtx_socket;
+	std::shared_mutex mtx_socket;
 	vector<char> recvBuffer;//uniquement utilisé et modifié dans listen_tcpSocket ?! no need mtx
 
 private:
+	//ne pas utiliser un pointeur ! dans accept, trouver un joueur dispo et lui attribuer le socket? en parler avec le chat
 	SOCKET* tcpSocket = nullptr;//uniquement modifié dans listen_tcpSocket ?! no need mtx dans listen_tcp socket, uniquement dans getters
 
 	sockaddr_in addr = {};//mettre un mutex udpSocket sur ces 2 là ?!

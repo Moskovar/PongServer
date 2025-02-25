@@ -202,12 +202,12 @@ void Server::listen_clientsTCP()
         FD_ZERO(&readfds); // reset l'ensemble &readfds
         std::unique_lock<std::mutex> lock(mtx_players);
         //std::cout << players.size() << std::endl;
-        for (auto it = players.begin(); it != players.end(); ++it)
+        for (auto it = players.begin(); it != players.end(); ++it)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
         {            
             Player& p = it->second;
-            if (p.isAvailableInPool()) continue;
+            if (p.availableInPool.load(std::memory_order_relaxed)) continue;
 
-            if ((!p.connected.load(std::memory_order_relaxed) || !p.isSocketValid()) && !p.inGame.load(std::memory_order_relaxed))//Si un joueur n'est plus valid (déco  etc) on le nettoie
+            if (!p.inGame.load(std::memory_order_relaxed) && (!p.connected.load(std::memory_order_relaxed) || !p.isSocketValid()))//Si un joueur n'est plus valid (déco  etc) on le nettoie
             {
                 p.resetPlayer();//libère le joueur dans la pool
 

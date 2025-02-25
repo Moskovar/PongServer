@@ -121,14 +121,22 @@ void Player::update(uti::NetworkPaddle& np)
 
 SOCKET* Player::getTCPSocket()
 {
-    std::lock_guard<std::mutex> lock(mtx_socket);
+    std::shared_lock<std::shared_mutex> lock(mtx_socket);
     return tcpSocket;
 }
 
 bool Player::isSocketValid()
 {
-    std::lock_guard<std::mutex> lock(mtx_socket);
-    return tcpSocket && *tcpSocket != INVALID_SOCKET;
+    std::shared_lock<std::shared_mutex> lock(mtx_socket);
+    return !tcpSocket || *tcpSocket != INVALID_SOCKET;
+}
+
+void Player::closeSocket()
+{
+    std::unique_lock<std::shared_mutex> lock(mtx_socket);
+    closesocket(*tcpSocket);
+    delete tcpSocket;
+    tcpSocket = nullptr;
 }
 
 void Player::setZ(float z)
@@ -151,7 +159,7 @@ void Player::leaveGame()
 
 void Player::sendVersionTCP(int version)
 {
-    if (!connected) return;//si le joueur n'est pas connecté, on sort
+    if (!connected.load(std::memory_order_relaxed)) return;//si le joueur n'est pas connecté, on sort
 
     uti::NetworkVersion nv;
 
@@ -169,13 +177,19 @@ void Player::sendVersionTCP(int version)
 
     while (totalSent < dataSize) 
     {
-        if (!tcpSocket || *tcpSocket == INVALID_SOCKET) 
+        if (!isSocketValid()) 
         {
             std::cerr << "Error: Invalid socket!" << std::endl;
             return;
         }
 
-        int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+        int iResult = -1;
+
+        {//mtx_socket
+            std::unique_lock<std::shared_mutex> lock(mtx_socket);
+            iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+        }
+
         if (iResult == SOCKET_ERROR)
         {
             int error = WSAGetLastError();
@@ -184,10 +198,10 @@ void Player::sendVersionTCP(int version)
                 std::cerr << "[sendVersionTCP] Send would block, retrying... (" << retries + 1 << "/" << MAX_RETRIES << ")" << std::endl;
                 retries++;
 
-                if (retries == MAX_RETRIES) {
+                if (retries == MAX_RETRIES) 
+                {
                     std::cerr << "[sendVersionTCP] Send failed after multiple retries, closing socket." << std::endl;
-                    closesocket(*tcpSocket);
-                    tcpSocket = nullptr;
+                    closeSocket();
                     return;
                 }
 
@@ -196,16 +210,14 @@ void Player::sendVersionTCP(int version)
             else 
             {
                 std::cerr << "[sendVersionTCP] send failed: " << error << std::endl;
-                closesocket(*tcpSocket);
-                tcpSocket = nullptr; // Éviter un pointeur dangling
+                closeSocket();
                 return;
             }
         }
         else if (iResult == 0) 
         {
             std::cerr << "Connection closed by peer." << std::endl;
-            closesocket(*tcpSocket);
-            tcpSocket = nullptr; // Éviter l'utilisation d'un pointeur dangling
+            closeSocket();
             return;
         }
         totalSent += iResult;
@@ -214,7 +226,7 @@ void Player::sendVersionTCP(int version)
 
 void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 {
-    if (!connected) return;//si le joueur n'est pas connecté, on sort
+    if (!connected.load(std::memory_order_relaxed)) return;//si le joueur n'est pas connecté, on sort
     //std::cout << "NPS SENT: " << nps.header << " : " << nps.gameID << " : " << nps.id << " : " << nps.side << std::endl;
 
     // Convertir les valeurs en big-endian avant l'envoi
@@ -235,13 +247,19 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 
     while (totalSent < dataSize) 
     {
-        if (!tcpSocket || *tcpSocket == INVALID_SOCKET)
+        if (!isSocketValid())
         {
             std::cerr << "Error: Invalid socket!" << std::endl;
             return;
         }
 
-        int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+        int iResult = -1;
+
+        {//mtx_socket
+            std::unique_lock<std::shared_mutex> lock(mtx_socket);
+            iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+        }
+
         if (iResult == SOCKET_ERROR)
         {
             int error = WSAGetLastError();
@@ -252,8 +270,7 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 
                 if (retries == MAX_RETRIES) {
                     std::cerr << "[sendVersionTCP] Send failed after multiple retries, closing socket." << std::endl;
-                    closesocket(*tcpSocket);
-                    tcpSocket = nullptr;
+                    closeSocket();
                     return;
                 }
 
@@ -262,16 +279,14 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
             else 
             {
                 std::cerr << "[sendVersionTCP] send failed: " << error << std::endl;
-                closesocket(*tcpSocket);
-                tcpSocket = nullptr; // Éviter un pointeur dangling
+                closeSocket();
                 return;
             }
         }
         else if (iResult == 0) 
         {
             std::cerr << "Connection closed by peer." << std::endl;
-            closesocket(*tcpSocket);
-            tcpSocket = nullptr; // Éviter l'utilisation d'un pointeur dangling
+            closeSocket();
             return;
         }
 
@@ -283,14 +298,14 @@ void Player::sendNPSTCP(uti::NetworkPaddleStart nps)
 
 void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
 {
-    if (!connected)
+    if (!connected.load(memory_order_relaxed))
     {
         //std::cout << "CANT SEND UDP MSG, PLAYER DISCONNECTED" << std::endl;
         return;
     }
 
     //std::cout << "send_NPUDP" << std::endl;
-    if (pData == nullptr) 
+    if (!pData) 
     { 
         std::cout << "pData nullptr" << std::endl;
         return; 
@@ -326,9 +341,9 @@ void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
 
 void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
 {
-    if (!connected || !inGame) return;
+    if (!connected.load(std::memory_order_relaxed) || !inGame.load(std::memory_order_relaxed)) return;
 
-    if (ball == nullptr)
+    if (!ball)
     {
         std::cout << "ball nullptr" << std::endl;
         return;
@@ -364,10 +379,10 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
 
 void Player::sendNBALLTCP(uti::NetworkBall nball)
 {
-    if (!connected) return;//si le joueur n'est pas connecté, on sort
+    if (!connected.load(std::memory_order_relaxed)) return;//si le joueur n'est pas connecté, on sort
 
     // Envoyer une réponse
-    if (tcpSocket != nullptr)
+    if (tcpSocket)
     {
         //std::cout << "BALL SENT: " << nball.x << " : " << nball.z << " : " << nball.velocityX << " : " << nball.velocityZ << std::endl;
         
@@ -390,13 +405,19 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
 
         while (totalSent < dataSize)
         {
-            if (!tcpSocket || *tcpSocket == INVALID_SOCKET)
+            if (!isSocketValid())
             {
                 std::cerr << "Error: Invalid socket!" << std::endl;
                 return;
             }
 
-            int iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+            int iResult = -1;
+
+            {//mtx_socket
+                std::unique_lock<std::shared_mutex> lock(mtx_socket);
+                iResult = ::send(*tcpSocket, data + totalSent, dataSize - totalSent, 0);
+            }
+
             if (iResult == SOCKET_ERROR)
             {
                 int error = WSAGetLastError();
@@ -407,8 +428,7 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
 
                     if (retries == MAX_RETRIES) {
                         std::cerr << "[sendVersionTCP] Send failed after multiple retries, closing socket." << std::endl;
-                        closesocket(*tcpSocket);
-                        tcpSocket = nullptr;
+                        closeSocket();
                         return;
                     }
 
@@ -417,15 +437,14 @@ void Player::sendNBALLTCP(uti::NetworkBall nball)
                 else
                 {
                     std::cerr << "[sendVersionTCP] send failed: " << error << std::endl;
-                    closesocket(*tcpSocket);
-                    tcpSocket = nullptr; // Éviter un pointeur dangling
+                    closeSocket();
                     return;
                 }
             }
             else if (iResult == 0)
             {
                 std::cerr << "Connection closed by peer." << std::endl;
-                closesocket(*tcpSocket);
+                closeSocket();
                 return;
             }
 
