@@ -91,8 +91,8 @@ Server::Server()//gérer les erreurs avec des exceptions
     t_run_games = new thread(&Server::run_games, this);
     cout << "- Run games thread runs !" << endl;
 
-    t_run_matchmaking = new thread(&Server::run_matchmaking, this);
-    cout << "- Matchmaking thread runs !" << endl;
+    //t_run_matchmaking = new thread(&Server::run_matchmaking, this);
+    //cout << "- Matchmaking thread runs !" << endl;
     
     //t_send_clientsUDP   = new thread(&Server::send_NEUDP, this);
     //cout << "- Send UDP thread runs !" << endl;
@@ -285,7 +285,7 @@ void Server::listen_clientsTCP()
                             }
                             else if (header == uti::Header::MATCHMAKING)
                             {
-                                std::cout << "Demande de matchmaking received!" << std::endl;
+                                std::cout << "Etat de matchmaking received:" << std::endl;
                                 //std::lock_guard<std::mutex> lock(mtx_players);
 
                                 p.inMatchmaking = !p.inMatchmaking;
@@ -295,6 +295,8 @@ void Server::listen_clientsTCP()
                                     matchmaking.push_back(&p);
                                     std::cout << "New player in matchmaking, now in -> " << matchmaking.size() << std::endl;
                                 }
+
+                                run_matchmaking();
                             }
                             else if (header == uti::Header::STATE)
                             {
@@ -464,21 +466,31 @@ void Server::run_games()
 
 void Server::run_matchmaking()
 {
-    while(run)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::unique_lock<std::mutex> lock_mm(mtx_matchmaking);//attention à l'ordre de lock
-        std::unique_lock<std::mutex> lock_players(mtx_players);//doit tjrs être lock dans le même ordre
+    //while(run)
+    //{
+        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        //std::unique_lock<std::mutex> lock_mm(mtx_matchmaking);//attention à l'ordre de lock
+        //std::unique_lock<std::mutex> lock_players(mtx_players);//doit tjrs être lock dans le même ordre
 
         matchmaking.erase(
             std::remove_if(matchmaking.begin(), matchmaking.end(), [](Player* p) 
                 { 
-                    return !p || p->availableInPool || !p->connected || p->inGame;
+                    bool remove = !p || p->availableInPool || !p->connected || p->inGame || !p->inMatchmaking;
+
+                    if (remove) 
+                    {
+                        std::cout << "1 player has been removed from matchmaking" << std::endl;
+                        if(p) p->inMatchmaking = false;
+                    }
+
+                    return remove;
                 }),
             matchmaking.end()
         );
 
-        if (matchmaking.size() < 2) continue;//s'il y a moins de 2 joueurs dans le matchmaking on skip
+        //std::cout << "Matchmaking size: " << matchmaking.size() << std::endl;
+
+        if (matchmaking.size() < 2) return;//s'il y a moins de 2 joueurs dans le matchmaking on skip
 
         int gameID = -1;
 
@@ -494,7 +506,7 @@ void Server::run_matchmaking()
             }
         }
 
-        if (gameID == -1) continue;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
+        if (gameID == -1) return;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
 
         //mtx_games.lock();
 
@@ -511,5 +523,5 @@ void Server::run_matchmaking()
             std::cout << "Can't start the game, P1 or P2 nullptr!" << std::endl;
         }
         //mtx_games.unlock();
-    }
+    //}
 }

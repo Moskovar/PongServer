@@ -23,21 +23,23 @@ public:
 	void resetPlayer();
 	bool isAvailableInPool() { return availableInPool; }//si le joueur dispo dans la pool
 
-	//--- Getters ---//
-	short					getID()			{ return id;															}
+	//--- Gestion des états ---//
+	short getID();
+	short getGameID();
+	short getSide();
+
+	void setID(short id);
+	void setGameID(short gameID);
+	void setSide(short side);//utilisé quand la game est créée, on créée le paddle également
+
 	int						getAddrLen()	{ return addrLen;														}
-	short					getGameID()		{ return gameID;														}
-	short					getSide()		{ return side;															}
 	uti::NetworkPaddleStart getNps()		{ return { uti::Header::NPS, gameID, id, side };						}
 	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle.getZ() * 1000)}; }
 
 	//--- Setters ---//
-	void setID(short id)			{ this->id = id;			}
-	void setGameID(short gameID)	{ this->gameID = gameID;	}
 	//Paddle protégé par mtx_paddle
 	void setZ(float z);
 	//Paddle protégé par mtx_paddle
-	void setSide(short side);//utilisé quand la game est créée, on créée le paddle également
 	void setAddr(sockaddr_in addr);//uniquement utilsé dans listen_udpSocket
 	
 	//--- Lien entre la communication et le joueur ---//
@@ -76,6 +78,7 @@ private:
 	sockaddr_in addr = {};//mettre un mutex udpSocket sur ces 2 là ?!
 	int	  addrLen	=  0;
 
+	std::mutex mtx_states;
 	short	gameID	= -1,//-1 = pas de game
 			id		=  0,
 	    	side	=  0;

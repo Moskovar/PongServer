@@ -57,7 +57,50 @@ void Player::resetPlayer()
     inGame          = false;
     inMatchmaking   = false;
 
-    cout << "Player " << id << " has been reset !\n" << endl;
+    cout << "Player " << getID() << " has been reset !\n" << endl;
+}
+
+short Player::getID()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return id;
+}
+
+short Player::getGameID()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return gameID;
+}
+
+short Player::getSide()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    return side;
+}
+
+void Player::setID(short id)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    this->id = id;
+}
+
+void Player::setGameID(short gameID)
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    this->gameID = gameID;
+}
+
+void Player::setSide(short side)
+{
+    {
+        std::lock_guard<std::mutex> lock_states(mtx_states);
+        this->side = side;
+    }
+
+    std::lock_guard<std::mutex> lock_paddle(mtx_paddle);
+    if      (side == -1) paddle.setPosition(glm::vec3(-70.0f, 0.0f, 0.0f));
+    else if (side ==  1) paddle.setPosition(glm::vec3( 70.0f, 0.0f, 0.0f));
+    //else { std::cout << "La paddle existe deja..." << std::endl; }
 }
 
 void Player::update(uti::NetworkPaddle& np)
@@ -82,16 +125,6 @@ void Player::setZ(float z)
 {
     std::lock_guard<std::mutex> lock(mtx_paddle);
     paddle.setZ(z);
-}
-
-void Player::setSide(short side)
-{
-    this->side = side;
-
-    std::lock_guard<std::mutex> lock(mtx_paddle);
-    if      (side == -1) paddle.setPosition(glm::vec3(-70.0f, 0.0f, 0.0f));
-    else if (side ==  1) paddle.setPosition(glm::vec3( 70.0f, 0.0f, 0.0f));
-    //else { std::cout << "La paddle existe deja..." << std::endl; }
 }
 
 void Player::setAddr(sockaddr_in addr)
