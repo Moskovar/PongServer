@@ -37,8 +37,8 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 
     //ball.setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
 
-    p1->inMatchmaking = false;
-    p2->inMatchmaking = false;
+    p1->inMatchmaking.store(false, std::memory_order_relaxed);
+    p2->inMatchmaking.store(false, std::memory_order_relaxed);
 
     p1->setGameID(gameID);
     p2->setGameID(gameID);
@@ -54,12 +54,12 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
     p1->sendNPSTCP(nps1);//envoyer le joueur à lui même en premier
     p1->sendNPSTCP(nps2);
 
-    p1->inGame = true;
+    p1->inGame.store(true, std::memory_order_relaxed);
 
     p2->sendNPSTCP(nps2);//envoyer le joueur à lui même en premier
     p2->sendNPSTCP(nps1);
 
-    p2->inGame = true;
+    p2->inGame.store(true, std::memory_order_relaxed);
 
     std::cout << "Game created with ID: " << gameID << std::endl;
 

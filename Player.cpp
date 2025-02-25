@@ -51,6 +51,9 @@ void Player::resetPlayer()
 
     resetStates();
 
+    std::unique_lock<std::shared_mutex> lock(mtx_udp);;
+    addrLen = -1;
+
     cout << "Player " << getID() << " has been reset !\n" << endl;
 }
 
@@ -99,14 +102,14 @@ void Player::setSide(short side)
 
 void Player::setStates()
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     availableInPool.store(false, std::memory_order_relaxed);
     connected.store(      true , std::memory_order_relaxed);
 }
 
 void Player::resetStates()
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     availableInPool.store(true , std::memory_order_relaxed);
     connected.store(      false, std::memory_order_relaxed);
     inGame.store(         false, std::memory_order_relaxed);
@@ -147,8 +150,23 @@ void Player::setZ(float z)
 
 void Player::setAddr(sockaddr_in addr)
 {
+    if (memcmp(&addr, &addr, sizeof(sockaddr_in)) == 0 && addrLen == sizeof(addr)) return;
+
+    std::unique_lock<std::shared_mutex> lock(mtx_udp);
     this->addr  = addr;
     addrLen     = sizeof(this->addr);
+}
+
+sockaddr_in* Player::getPAddr()
+{
+    std::shared_lock<std::shared_mutex> lock(mtx_udp);
+    return &addr;
+}
+
+int& Player::getAddrLen()
+{
+    std::shared_lock<std::shared_mutex> lock(mtx_udp);
+    return addrLen;
 }
 
 void Player::leaveGame()
@@ -327,7 +345,7 @@ void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
 
     //std::cout << addrLen << std::endl;
 
-    int bytesSent = sendto(udpSocket, (const char*)&np, sizeof(np), 0, (sockaddr*)&addr, addrLen);
+    int bytesSent = sendto(udpSocket, (const char*)&np, sizeof(np), 0, (sockaddr*)getPAddr(), getAddrLen());
     if (bytesSent == SOCKET_ERROR) 
     {
         std::cerr << "Erreur lors de l'envoi des donnees -> " << WSAGetLastError() << std::endl;
@@ -369,7 +387,7 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
 
     //std::cout << addrLen << std::endl;
 
-    int bytesSent = sendto(udpSocket, (const char*)&nb, sizeof(nb), 0, (sockaddr*)&addr, addrLen);
+    int bytesSent = sendto(udpSocket, (const char*)&nb, sizeof(nb), 0, (sockaddr*)getPAddr(), getAddrLen());
     if (bytesSent == SOCKET_ERROR)
     {
         std::cerr << "Erreur lors de l'envoi des donnees -> " << WSAGetLastError() << std::endl;

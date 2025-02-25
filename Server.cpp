@@ -221,7 +221,6 @@ void Server::listen_clientsTCP()
         }
         lock.unlock();//unlock manuellement pour éviter les 100ms de pause après
 
-        //--- A DELETE
         // Vérifiez si le fd_set est vide
         if (readfds.fd_count == 0) 
         {
@@ -240,17 +239,22 @@ void Server::listen_clientsTCP()
         }
 
         std::lock_guard<std::mutex> lock_players(mtx_players);
-        for (auto it = players.begin(); it != players.end(); ++it) 
+        for (auto it = players.begin(); it != players.end(); ++it)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
         {
             Player& p = it->second;
 
-            if (p.isAvailableInPool()) continue;
+            if (p.availableInPool.load(std::memory_order_relaxed)) continue;
 
             SOCKET* clientSocket = p.getTCPSocket();
             if (clientSocket && p.connected.load(std::memory_order_relaxed) && FD_ISSET(*clientSocket, &readfds)) //On check si le socket a reçu des données
             {
                 char buffer[recvbuflen];
-                iResult = recv(*clientSocket, buffer, recvbuflen, 0);
+
+                {
+                    std::shared_lock<std::shared_mutex> lock(p.mtx_socket);
+                    iResult = recv(*clientSocket, buffer, recvbuflen, 0);
+                }
+
                 if (iResult > 0) //Si on a reçu quelque chose
                 {
                     p.recvBuffer.insert(p.recvBuffer.end(), buffer, buffer + iResult);

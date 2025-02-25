@@ -36,7 +36,6 @@ public:
 	void setStates();
 	void resetStates();
 
-	int						getAddrLen()	{ return addrLen;														}
 	uti::NetworkPaddleStart getNps()		{ return { uti::Header::NPS, gameID, id, side };						}
 	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle.getZ() * 1000)};  }//protéger le getZ
 
@@ -45,6 +44,8 @@ public:
 	void setZ(float z);
 	//Paddle protégé par mtx_paddle
 	void setAddr(sockaddr_in addr);//uniquement utilsé dans listen_udpSocket
+	sockaddr_in* getPAddr();
+	int& getAddrLen();
 	
 	//--- Lien entre la communication et le joueur ---//
 
@@ -53,7 +54,6 @@ public:
 
 	//--- communication ---//
 	SOCKET* getTCPSocket();
-	sockaddr_in* getPAddr() { return &addr; }
 	bool isSocketValid();
 	void closeSocket();
 	float getPaddleWidth() { return paddleWidth; }
@@ -80,6 +80,7 @@ public:
 		, side	 = 0;//est modifié lors de la création d'une game et c'est tout ?!
 	//std::atomic<short> gameID{ -1 }, id{ 0 }, side { 0 };
 
+	std::shared_mutex mtx_udp;
 	std::shared_mutex mtx_socket;
 	vector<char> recvBuffer;//uniquement utilisé et modifié dans listen_tcpSocket ?! no need mtx
 
@@ -90,15 +91,11 @@ private:
 	sockaddr_in addr = {};//mettre un mutex udpSocket sur ces 2 là ?!
 	int	  addrLen	=  0;
 
-	std::mutex mtx_states;
+	//std::mutex mtx_states;
 
 	//--- Paddle ---//
 	std::mutex mtx_paddle;
 	Paddle paddle;
 	float paddleWidth = 10.2f;
-
-	//Pong
-
-	std::chrono::steady_clock::time_point prevTime;//pour calculer le deltatime
 };
 
