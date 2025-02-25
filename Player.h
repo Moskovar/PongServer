@@ -7,6 +7,7 @@
 #include "Paddle.h"
 #include "Ball.h"
 #include <mutex>
+#include <atomic>
 //#include <ws2tcpip.h>
 
 using namespace std;
@@ -31,6 +32,8 @@ public:
 	void setID(short id);
 	void setGameID(short gameID);
 	void setSide(short side);//utilisé quand la game est créée, on créée le paddle également
+	void setStates();
+	void resetStates();
 
 	int						getAddrLen()	{ return addrLen;														}
 	uti::NetworkPaddleStart getNps()		{ return { uti::Header::NPS, gameID, id, side };						}
@@ -66,8 +69,14 @@ public:
 	void send_NPUDP(SOCKET& udpSocket, Player* pData);
 	void send_BALLUDP(SOCKET udpSocket, Ball* ball);
 
-	bool availableInPool = true,//si l'objet est utilisé pour un joueur dans la pool
-	     connected		 = false, inGame = false, inMatchmaking = false;
+	//--- Gestion des états ---//
+	std::atomic<bool> availableInPool{ true },//si l'objet est utilisé pour un joueur dans la pool
+		connected = { false }, inGame = { false }, inMatchmaking = { false };
+				      //Thread safe car:
+	short gameID = -1//se fait au lancement d'une partie et à sa fin ? les 2 ne peuvent pas se faire en même temps ?!
+		, id	 = 0//Se fait à la connexion d'un joueur, après on n'y touche pas !
+		, side	 = 0;//est modifié lors de la création d'une game et c'est tout ?!
+	//std::atomic<short> gameID{ -1 }, id{ 0 }, side { 0 };
 
 	std::mutex mtx_socket;
 	vector<char> recvBuffer;//uniquement utilisé et modifié dans listen_tcpSocket ?! no need mtx
@@ -79,9 +88,6 @@ private:
 	int	  addrLen	=  0;
 
 	std::mutex mtx_states;
-	short	gameID	= -1,//-1 = pas de game
-			id		=  0,
-	    	side	=  0;
 
 	//--- Paddle ---//
 	std::mutex mtx_paddle;

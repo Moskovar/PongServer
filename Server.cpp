@@ -155,13 +155,12 @@ void Server::accept_connections()
     {
         SOCKET* tcpSocket = new SOCKET();
         *tcpSocket = accept(connectionSocket, NULL, NULL);
-        std::lock_guard<std::mutex> lock(mtx_players);
         if (*tcpSocket != INVALID_SOCKET) 
         {
             int id      = -1;//pour donner un id au joueur
             for (int i = 0; i < MAX_PLAYER_NUMBER; i++)//<= pour parcourir une case de plus et si tout est full alors le player sera placé à la fin (id = size)
             {
-                if (players[i].isAvailableInPool()) { id = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
+                if (players[i].availableInPool.load(std::memory_order_relaxed)) { id = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
             }
 
             if (id == -1) 
@@ -208,7 +207,7 @@ void Server::listen_clientsTCP()
             Player& p = it->second;
             if (p.isAvailableInPool()) continue;
 
-            if ((!p.connected || !p.isSocketValid()) && !p.inGame)//Si un joueur n'est plus valid (déco  etc) on le nettoie
+            if ((!p.connected.load(std::memory_order_relaxed) || !p.isSocketValid()) && !p.inGame.load(std::memory_order_relaxed))//Si un joueur n'est plus valid (déco  etc) on le nettoie
             {
                 p.resetPlayer();//libère le joueur dans la pool
 
@@ -248,7 +247,7 @@ void Server::listen_clientsTCP()
             if (p.isAvailableInPool()) continue;
 
             SOCKET* clientSocket = p.getTCPSocket();
-            if (clientSocket && p.connected && FD_ISSET(*clientSocket, &readfds)) //On check si le socket a reçu des données
+            if (clientSocket && p.connected.load(std::memory_order_relaxed) && FD_ISSET(*clientSocket, &readfds)) //On check si le socket a reçu des données
             {
                 char buffer[recvbuflen];
                 iResult = recv(*clientSocket, buffer, recvbuflen, 0);
@@ -288,9 +287,9 @@ void Server::listen_clientsTCP()
                                 std::cout << "Etat de matchmaking received:" << std::endl;
                                 //std::lock_guard<std::mutex> lock(mtx_players);
 
-                                p.inMatchmaking = !p.inMatchmaking;
+                                p.inMatchmaking.store(!p.inMatchmaking.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
-                                if (p.inMatchmaking)
+                                if (p.inMatchmaking.load(std::memory_order_relaxed))
                                 {
                                     matchmaking.push_back(&p);
                                     std::cout << "New player in matchmaking, now in -> " << matchmaking.size() << std::endl;
@@ -306,7 +305,7 @@ void Server::listen_clientsTCP()
                                 nst.header = ntohs(nst.header);
                                 nst.inGame = ntohs(nst.inGame);
 
-                                p.inGame = nst.inGame;
+                                p.inGame.store(nst.inGame, std::memory_order_relaxed);
 
                                 std::cout << "STATE RECEIVED: " << nst.header << " : " << nst.inGame << std::endl;
                             }
@@ -385,7 +384,7 @@ void Server::listen_clientsUDP()
 
             //std::cout << "DATA: " << players[np.id].availableInPool << " : " << games[np.gameID].availableInPool << std::endl;
 
-            if (!players[np.id].availableInPool && !games[np.gameID].isAvailableInPool())
+            if (!players[np.id].availableInPool.load(std::memory_order_relaxed) && !games[np.gameID].isAvailableInPool())
             {
                 //std::cout << "MSG sent to players in the game: " << np.gameID << std::endl;
 
@@ -475,12 +474,12 @@ void Server::run_matchmaking()
         matchmaking.erase(
             std::remove_if(matchmaking.begin(), matchmaking.end(), [](Player* p) 
                 { 
-                    bool remove = !p || p->availableInPool || !p->connected || p->inGame || !p->inMatchmaking;
+                    bool remove = !p || p->availableInPool.load(std::memory_order_relaxed) || !p->connected.load(std::memory_order_relaxed) || p->inGame.load(std::memory_order_relaxed) || !p->inMatchmaking.load(std::memory_order_relaxed);
 
                     if (remove) 
                     {
                         std::cout << "1 player has been removed from matchmaking" << std::endl;
-                        if(p) p->inMatchmaking = false;
+                        if(p) p->inMatchmaking.store(false, std::memory_order_relaxed);
                     }
 
                     return remove;

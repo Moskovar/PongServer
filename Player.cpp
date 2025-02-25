@@ -35,10 +35,7 @@ void Player::setPlayer(SOCKET* tcpSocket)
     u_long mode = 1;
     ioctlsocket(*tcpSocket, FIONBIO, &mode);//mode non bloquant
 
-    connected       = true;
-    availableInPool = false;
-    inGame          = false;
-    inMatchmaking   = false;
+    setStates();
 }
 
 void Player::resetPlayer()
@@ -50,50 +47,47 @@ void Player::resetPlayer()
         tcpSocket = nullptr;
     }
 
-    paddle.setPosition(glm::vec3(0.0, 0.0, 0.0));
+    //paddle.setPosition(glm::vec3(0.0, 0.0, 0.0));
 
-    availableInPool = true;
-    connected       = false;
-    inGame          = false;
-    inMatchmaking   = false;
+    resetStates();
 
     cout << "Player " << getID() << " has been reset !\n" << endl;
 }
 
 short Player::getID()
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     return id;
 }
 
 short Player::getGameID()
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     return gameID;
 }
 
 short Player::getSide()
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     return side;
 }
 
 void Player::setID(short id)
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     this->id = id;
 }
 
 void Player::setGameID(short gameID)
 {
-    std::lock_guard<std::mutex> lock(mtx_states);
+    //std::lock_guard<std::mutex> lock(mtx_states);
     this->gameID = gameID;
 }
 
 void Player::setSide(short side)
 {
     {
-        std::lock_guard<std::mutex> lock_states(mtx_states);
+        //std::lock_guard<std::mutex> lock_states(mtx_states);
         this->side = side;
     }
 
@@ -101,6 +95,22 @@ void Player::setSide(short side)
     if      (side == -1) paddle.setPosition(glm::vec3(-70.0f, 0.0f, 0.0f));
     else if (side ==  1) paddle.setPosition(glm::vec3( 70.0f, 0.0f, 0.0f));
     //else { std::cout << "La paddle existe deja..." << std::endl; }
+}
+
+void Player::setStates()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    availableInPool.store(false, std::memory_order_relaxed);
+    connected.store(      true , std::memory_order_relaxed);
+}
+
+void Player::resetStates()
+{
+    std::lock_guard<std::mutex> lock(mtx_states);
+    availableInPool.store(true , std::memory_order_relaxed);
+    connected.store(      false, std::memory_order_relaxed);
+    inGame.store(         false, std::memory_order_relaxed);
+    inMatchmaking.store(  false, std::memory_order_relaxed);
 }
 
 void Player::update(uti::NetworkPaddle& np)
