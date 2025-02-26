@@ -224,7 +224,7 @@ void Server::listen_clientsTCP()
         //}
 
         {
-            std::lock_guard<std::mutex> lock(mtx_players);
+            std::lock_guard<std::mutex> lock(mtx_players);//useless on utilise cette liste juste ici ?
             for (auto it = playersConnected.begin(); it != playersConnected.end();)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
             {
                 Player* p = *it;
@@ -235,7 +235,12 @@ void Server::listen_clientsTCP()
                     continue;
                 }
 
-                if (p->availableInPool.load(std::memory_order_relaxed)) continue;
+                if (p->availableInPool.load(std::memory_order_relaxed))//à mettre avec en dessous
+                {
+                    p->resetPlayer();//libère le joueur dans la pool
+                    it = playersConnected.erase(it);
+                    continue;
+                }
 
                 if (!p->inGame.load(std::memory_order_relaxed) && (!p->connected.load(std::memory_order_relaxed) || !p->isSocketValid()))//Si un joueur n'est plus valid (déco  etc) on le nettoie
                 {
@@ -564,6 +569,47 @@ void Server::run_games()
         if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //17 ~= 60fps ||--> si une boucle tourne en 300ms alors on est fcked up? 300 > 17 ce truc sert à rien
             last_timestamp_send_ball = uti::getCurrentTimestampMs();       //A voir après création d'une liste dédiée aux games actives
 
+        //for (auto it = gamesPool.begin(); it != gamesPool.end(); ++it)//liste de game en cours pour pas tourner sur les useless
+        //{
+        //    Game& game = it->second;
+
+        //    bool isGameAvailableInPool = game.availableInPool.load(std::memory_order_relaxed);
+
+        //    if (isGameAvailableInPool) continue;
+
+        //    //std::cout << "P1 DC: "  << !it->second->getP1()->connected << std::endl;
+        //    //std::cout << "P2 DC: "  << !it->second->getP2()->connected << std::endl;
+        //    //std::cout << "ALL DC: " <<  it->second->allPlayersDisconnected() << std::endl;
+
+        //    if (!isGameAvailableInPool && (game.allPlayersDisconnected() || game.allPlayersLeftGame()))
+        //    {
+        //        Player* p1 = game.getP1();
+        //        if (p1) p1->inGame = false;
+
+        //        Player* p2 = game.getP2();
+        //        if (p2) p2->inGame = false;
+
+        //        game.reset();
+
+        //        std::cout << "A game has been finished from all players disconnected ..." << std::endl;
+
+        //        continue;
+        //    }
+
+        //    bool roundStarted = game.roundStarted.load(std::memory_order_relaxed);
+
+        //    if (roundStarted)//Si la game a démarré, on la joue
+        //    {
+        //        game.run(udpSocket, deltaTime.count());
+        //        if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
+        //            game.sendBallToPlayersUDP(udpSocket);
+        //    }
+        //    else if (!roundStarted && uti::getCurrentTimestamp() - game.round_start_time >= 3)//si la game n'a pas démarré
+        //    {
+        //        game.startRound(udpSocket);
+        //    }
+        //}
+
         for (auto it = gamesPool.begin(); it != gamesPool.end(); ++it)//liste de game en cours pour pas tourner sur les useless
         {
             Game& game = it->second;
@@ -596,7 +642,7 @@ void Server::run_games()
             if (roundStarted)//Si la game a démarré, on la joue
             {
                 game.run(udpSocket, deltaTime.count());
-                if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
+                if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
                     game.sendBallToPlayersUDP(udpSocket);
             }
             else if (!roundStarted && uti::getCurrentTimestamp() - game.round_start_time >= 3)//si la game n'a pas démarré
@@ -654,6 +700,8 @@ void Server::run_matchmaking()
 
         if (gamesPool[gameID].set(gameID, p1, p2, &walls))
         {
+            gamesLaunched.insert(&gamesPool[gameID]);
+
             matchmaking.erase(matchmaking.begin());//on enlève le premier élément
             matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
 
