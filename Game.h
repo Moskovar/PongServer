@@ -17,25 +17,6 @@ class Game
 		Player* getP1()					{ return p1;						}
 		Player* getP2()					{ return p2;						}
 
-		//--- Gestion des états ---//
-
-		bool isAvailableInPool();
-		bool isRoundStarted();
-
-		void setAvailableInPool(bool state);
-		void setRoundStarted(bool state);
-		
-		//--- Gestion du temps ---//
-
-		u_int64 getGame_created_time();
-		u_int64 getRound_start_time();
-		u_int64 getBallSpeed_increase_time();
-
-		void setGame_created_time(u_int64 time);
-		void setRound_start_time(u_int64 time);
-		void setBallSpeed_increase_time(u_int64 time);
-
-
 		bool allPlayersDisconnected();
 		bool allPlayersLeftGame();
 
@@ -47,19 +28,16 @@ class Game
 		void increaseBallSpeed();
 		void run(SOCKET& udpSocket, float deltaTime);
 
-		
-		
-
 		SOCKET* udpSocket = nullptr;
+		//--- Gestion des états et du temps ---//
+		std::atomic<bool> availableInPool{ true }, roundStarted{ false };
+		u_int64 game_created_time = 0, round_start_time	= 0, ballSpeed_increase_time = 0;//actuellement uniquement utilisé dans la classe
 
 	private:
-		//--- Gestion des états et du temps ---//
-		std::mutex mtx_states;
-		bool availableInPool = true, roundStarted = false;
-		u_int64 game_created_time = 0, round_start_time	= 0, ballSpeed_increase = 0;
+		//std::mutex mtx_states;
 
 		//--- Gestion de la balle ---//
-		Ball ball;//utilisée uniquement dans le thread de logique de jeu, no need mutex ||-> on fait des reset ailleurs ?!
+		Ball ball;//utilisée uniquement dans le thread de logique de jeu, no need mutex ||--> on fait des reset ailleurs ?!
 
 		unsigned short gameID = 0, id = 0;
 		Player* p1 = nullptr, * p2 = nullptr, * lastWinner = nullptr;

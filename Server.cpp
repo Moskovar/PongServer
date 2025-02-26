@@ -160,7 +160,7 @@ void Server::accept_connections()
             int id      = -1;//pour donner un id au joueur
             for (int i = 0; i < MAX_PLAYER_NUMBER; i++)//<= pour parcourir une case de plus et si tout est full alors le player sera placé à la fin (id = size)
             {
-                if (players[i].availableInPool.load(std::memory_order_relaxed)) { id = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
+                if (playersPool[i].availableInPool.load(std::memory_order_relaxed)) { id = i; break; }//si on trouve un trou, on met id à i et on sort de la boucle
             }
 
             if (id == -1) 
@@ -178,11 +178,15 @@ void Server::accept_connections()
 
             //Player* p = new Player(tcpSocket, id);
             //matchmaking.push_back(p);
-            players[id].setID(id);
-            players[id].setPlayer(tcpSocket);//on set le player de la pool avec les données du nouveau joueur
-            players[id].sendVersionTCP(1010);//on envoie la version au joueur
+            playersPool[id].setID(id);
+            playersPool[id].setPlayer(tcpSocket);//on set le player de la pool avec les données du nouveau joueur
+            {
+                std::lock_guard<std::mutex> lock(mtx_players);
+                playersConnected.insert(&playersPool[id]);
+            }
+            playersPool[id].sendVersionTCP(1010);//on envoie la version au joueur
 
-            cout << "Connection succeed !" << endl << players.size() << " clients " << id << " connected with ID " << id << " ! " << endl;
+            cout << "Connection succeed !" << endl << playersPool.size() << " clients " << id << " connected with ID " << id << " ! " << endl;
         }
         else std::cerr << "Connexion échoué -> erreur: " << WSAGetLastError() << std::endl;
         std::cout << "Waiting for new connection..." << std::endl;
@@ -200,9 +204,8 @@ void Server::listen_clientsTCP()
     {
         //std::cout << "LISTEN" << std::endl;
         FD_ZERO(&readfds); // reset l'ensemble &readfds
-        //std::unique_lock<std::mutex> lock(mtx_players);
         //std::cout << players.size() << std::endl;
-        for (auto it = players.begin(); it != players.end(); ++it)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
+        for (auto it = playersPool.begin(); it != playersPool.end(); ++it)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
         {            
             Player& p = it->second;
             if (p.availableInPool.load(std::memory_order_relaxed)) continue;
@@ -238,8 +241,7 @@ void Server::listen_clientsTCP()
             continue;
         }
 
-        //std::lock_guard<std::mutex> lock_players(mtx_players);
-        for (auto it = players.begin(); it != players.end(); ++it)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
+        for (auto it = playersPool.begin(); it != playersPool.end(); ++it)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
         {
             Player& p = it->second;
 
@@ -289,7 +291,6 @@ void Server::listen_clientsTCP()
                             else if (header == uti::Header::MATCHMAKING)
                             {
                                 std::cout << "Etat de matchmaking received:" << std::endl;
-                                //std::lock_guard<std::mutex> lock(mtx_players);
 
                                 p.inMatchmaking.store(!p.inMatchmaking.load(std::memory_order_relaxed), std::memory_order_relaxed);
 
@@ -390,16 +391,16 @@ void Server::listen_clientsUDP()
 
             //std::cout << "DATA: " << players[np.id].availableInPool << " : " << games[np.gameID].availableInPool << std::endl;
 
-            if (!players[np.id].availableInPool.load(std::memory_order_relaxed) && !games[np.gameID].isAvailableInPool())
+            if (!playersPool[np.id].availableInPool.load(std::memory_order_relaxed) && !gamesPool[np.gameID].availableInPool.load(std::memory_order_relaxed))
             {
                 //std::cout << "MSG sent to players in the game: " << np.gameID << std::endl;
 
                 //players[np.id].getPPaddle()->z.store((float)(np.z / 1000.0f), std::memory_order_seq_cst);
                 //players[np.id].getPPaddle()->setZ((float)(np.z / 1000.0f));//met à jour le float z du paddle protégé par le mutex
-                players[np.id].setAddr(clientAddr);
-                players[np.id].update(np);
+                playersPool[np.id].setAddr(clientAddr);
+                playersPool[np.id].update(np);
 
-                games[np.gameID].getOtherPlayer(np.id)->send_NPUDP(udpSocket, &players[np.id]);
+                gamesPool[np.gameID].getOtherPlayer(np.id)->send_NPUDP(udpSocket, &playersPool[np.id]);
             }
             else
             {
@@ -417,20 +418,21 @@ void Server::run_games()
 
     while (run)
     {
+        //std::this_thread::sleep_for(std::chrono::nanoseconds(50));//pour laisser du repos au processeur, une boucle tourne en ~300ms (à voir avec bcp de parties) 1ms = 1000ns
+        //std::this_thread::yield();
         auto currentTime = Clock::now();
         std::chrono::duration<float> deltaTime = currentTime - lastTime;
         lastTime = currentTime;
+        //std::cout << deltaTime.count() << std::endl;
 
-        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //17 ~= 60fps
-            last_timestamp_send_ball = uti::getCurrentTimestampMs();
+        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //17 ~= 60fps ||--> si une boucle tourne en 300ms alors on est fcked up? 300 > 17 ce truc sert à rien
+            last_timestamp_send_ball = uti::getCurrentTimestampMs();       //A voir après création d'une liste dédiée aux games actives
 
-        //std::lock_guard<std::mutex> lock_players(mtx_players);
-        //std::lock_guard<std::mutex> lock_games(mtx_games);
-        for (auto it = games.begin(); it != games.end(); ++it)//liste de game en cours pour pas tourner sur les useless
+        for (auto it = gamesPool.begin(); it != gamesPool.end(); ++it)//liste de game en cours pour pas tourner sur les useless
         {
             Game& game = it->second;
 
-            bool isGameAvailableInPool = game.isAvailableInPool();
+            bool isGameAvailableInPool = game.availableInPool.load(std::memory_order_relaxed);
 
             if (isGameAvailableInPool) continue;
 
@@ -453,7 +455,7 @@ void Server::run_games()
                 continue;
             }
 
-            bool roundStarted = game.isRoundStarted();
+            bool roundStarted = game.roundStarted.load(std::memory_order_relaxed);
 
             if (roundStarted)//Si la game a démarré, on la joue
             {
@@ -461,7 +463,7 @@ void Server::run_games()
                 if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
                     game.sendBallToPlayersUDP(udpSocket);
             }
-            else if (!roundStarted && uti::getCurrentTimestamp() - game.getRound_start_time() >= 3)//si la game n'a pas démarré
+            else if (!roundStarted && uti::getCurrentTimestamp() - game.round_start_time >= 3)//si la game n'a pas démarré
             {
                 game.startRound(udpSocket);
             }
@@ -476,8 +478,6 @@ void Server::run_matchmaking()
     //while(run)
     //{
         //std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        //std::unique_lock<std::mutex> lock_mm(mtx_matchmaking);//attention à l'ordre de lock
-        //std::unique_lock<std::mutex> lock_players(mtx_players);//doit tjrs être lock dans le même ordre
 
         matchmaking.erase(
             std::remove_if(matchmaking.begin(), matchmaking.end(), [](Player* p) 
@@ -506,7 +506,7 @@ void Server::run_matchmaking()
 
         for (int i = 0; i < MAX_GAME_NUMBER; i++)
         {
-            if (games[i].isAvailableInPool()) //si on trouve un trou, on met id à i et on sort de la boucle
+            if (gamesPool[i].availableInPool.load(std::memory_order_relaxed)) //si on trouve un trou, on met id à i et on sort de la boucle
             { 
                 gameID = i; 
                 break; 
@@ -515,9 +515,8 @@ void Server::run_matchmaking()
 
         if (gameID == -1) return;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
 
-        //mtx_games.lock();
 
-        if (games[gameID].set(gameID, p1, p2, &walls))
+        if (gamesPool[gameID].set(gameID, p1, p2, &walls))
         {
             matchmaking.erase(matchmaking.begin());//on enlève le premier élément
             matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
@@ -529,6 +528,5 @@ void Server::run_matchmaking()
         {
             std::cout << "Can't start the game, P1 or P2 nullptr!" << std::endl;
         }
-        //mtx_games.unlock();
     //}
 }

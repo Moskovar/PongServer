@@ -20,8 +20,8 @@ void Game::reset()
     //on reset la position de la balle dans le set, au moment d'envoyer les données de positions de la balle aux joueurs
     ball.setMoveSpeed(25);
     
-    roundStarted    = false;
-    availableInPool = true;
+    roundStarted.store(false, std::memory_order_relaxed);
+    availableInPool.store(true, std::memory_order_relaxed);
 }
 
 bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
@@ -65,11 +65,11 @@ bool Game::set(short gameID, Player* p1, Player* p2, std::vector<Wall>* walls)
 
     uint64_t now = uti::getCurrentTimestamp();
 
-    setGame_created_time(now);
-    setRound_start_time(now);
-    setBallSpeed_increase_time(now);
+    game_created_time       = now;
+    round_start_time        = now;
+    ballSpeed_increase_time = now;
 
-    availableInPool = false;
+    availableInPool.store(false, std::memory_order_relaxed);
 
     return true;
 }
@@ -78,66 +78,6 @@ Player* Game::getOtherPlayer(short id)
 {
     if (p1->getID() != id)	return p1;
     else					return p2;
-}
-
-bool Game::isAvailableInPool()
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    return availableInPool;
-}
-
-bool Game::isRoundStarted()
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    return roundStarted;
-}
-
-void Game::setAvailableInPool(bool state)
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    availableInPool = state;
-}
-
-void Game::setRoundStarted(bool state)
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    roundStarted = state;
-}
-
-u_int64 Game::getGame_created_time()
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    return game_created_time;
-}
-
-u_int64 Game::getRound_start_time()
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    return round_start_time;
-}
-
-u_int64 Game::getBallSpeed_increase_time()
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    return ballSpeed_increase;
-}
-
-void Game::setGame_created_time(u_int64 time)
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    game_created_time = time;
-}
-
-void Game::setRound_start_time(u_int64 time)
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    round_start_time = time;
-}
-
-void Game::setBallSpeed_increase_time(u_int64 time)
-{
-    std::lock_guard<std::mutex> lock(mtx_states);
-    ballSpeed_increase = time;
 }
 
 bool Game::allPlayersDisconnected()
@@ -190,7 +130,7 @@ void Game::startRound(SOCKET& udpSocket)
 {
     ball.start((lastWinner) ? -lastWinner->getSide() : 0);
 
-    roundStarted = true;
+    roundStarted.store(true, std::memory_order_relaxed);
     round_start_time = uti::getCurrentTimestamp();
     sendBallToPlayersUDP(udpSocket);
 }
@@ -198,7 +138,7 @@ void Game::startRound(SOCKET& udpSocket)
 void Game::resetRound()
 {
     resetBall();
-    roundStarted = false;
+    roundStarted.store(false, std::memory_order_relaxed);
     round_start_time = uti::getCurrentTimestamp();
 }
 
@@ -216,9 +156,9 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
     short isPaddle = true;//pour vérifier le type d'Element, plus rapide qu'un dynamic cast ?
 
     //Augmentation de la vitesse en fonction du temps
-    if ((uti::getCurrentTimestamp() - getBallSpeed_increase_time()) >= 1)
+    if ((uti::getCurrentTimestamp() - ballSpeed_increase_time) >= 1)
     {
-        setBallSpeed_increase_time(uti::getCurrentTimestamp());
+        ballSpeed_increase_time = uti::getCurrentTimestamp();
         increaseBallSpeed();
     }
 
