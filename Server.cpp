@@ -205,24 +205,53 @@ void Server::listen_clientsTCP()
         //std::cout << "LISTEN" << std::endl;
         FD_ZERO(&readfds); // reset l'ensemble &readfds
         //std::cout << players.size() << std::endl;
-        for (auto it = playersPool.begin(); it != playersPool.end(); ++it)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
-        {            
-            Player& p = it->second;
-            if (p.availableInPool.load(std::memory_order_relaxed)) continue;
+        //for (auto it = playersPool.begin(); it != playersPool.end(); ++it)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
+        //{            
+        //    Player& p = it->second;
+        //    if (p.availableInPool.load(std::memory_order_relaxed)) continue;
 
-            if (!p.inGame.load(std::memory_order_relaxed) && (!p.connected.load(std::memory_order_relaxed) || !p.isSocketValid()))//Si un joueur n'est plus valid (déco  etc) on le nettoie
+        //    if (!p.inGame.load(std::memory_order_relaxed) && (!p.connected.load(std::memory_order_relaxed) || !p.isSocketValid()))//Si un joueur n'est plus valid (déco  etc) on le nettoie
+        //    {
+        //        p.resetPlayer();//libère le joueur dans la pool
+
+        //        std::cout << "Player " << p.getID() << " disconnected ..." << std::endl;
+        //        continue;
+        //    }
+
+        //    FD_SET(*p.getTCPSocket(), &readfds);
+
+        //    //++it;
+        //}
+
+        {
+            std::lock_guard<std::mutex> lock(mtx_players);
+            for (auto it = playersConnected.begin(); it != playersConnected.end();)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
             {
-                p.resetPlayer();//libère le joueur dans la pool
+                Player* p = *it;
 
-                std::cout << "Player " << p.getID() << " disconnected ..." << std::endl;
-                continue;
+                if (!p)
+                {
+                    it = playersConnected.erase(it);
+                    continue;
+                }
+
+                if (p->availableInPool.load(std::memory_order_relaxed)) continue;
+
+                if (!p->inGame.load(std::memory_order_relaxed) && (!p->connected.load(std::memory_order_relaxed) || !p->isSocketValid()))//Si un joueur n'est plus valid (déco  etc) on le nettoie
+                {
+                    p->resetPlayer();//libère le joueur dans la pool
+
+                    it = playersConnected.erase(it);
+
+                    std::cout << "Player " << p->getID() << " disconnected ..." << std::endl;
+                    continue;
+                }
+
+                FD_SET(*(p->getTCPSocket()), &readfds);
+
+                ++it;
             }
-
-            FD_SET(*p.getTCPSocket(), &readfds);
-
-            //++it;
         }
-        //lock.unlock();//unlock manuellement pour éviter les 100ms de pause après
 
         // Vérifiez si le fd_set est vide
         if (readfds.fd_count == 0) 
@@ -241,100 +270,207 @@ void Server::listen_clientsTCP()
             continue;
         }
 
-        for (auto it = playersPool.begin(); it != playersPool.end(); ++it)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
         {
-            Player& p = it->second;
-
-            if (p.availableInPool.load(std::memory_order_relaxed)) continue;
-
-            SOCKET* clientSocket = p.getTCPSocket();
-            if (clientSocket && p.connected.load(std::memory_order_relaxed) && FD_ISSET(*clientSocket, &readfds)) //On check si le socket a reçu des données
+            std::lock_guard<std::mutex> lock(mtx_players);
+            for (auto it = playersConnected.begin(); it != playersConnected.end();)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
             {
-                char buffer[recvbuflen];
+                Player* p = *it;
 
+                if (!p)
                 {
-                    std::shared_lock<std::shared_mutex> lock(p.mtx_socket);
-                    iResult = recv(*clientSocket, buffer, recvbuflen, 0);
-                }
-
-                if (iResult > 0) //Si on a reçu quelque chose
-                {
-                    p.recvBuffer.insert(p.recvBuffer.end(), buffer, buffer + iResult);
-
-                    // Process received data
-                    while (p.recvBuffer.size() >= sizeof(short)) 
-                    {
-                        // Check if we have enough data for the header
-                        short header = 0;
-                        std::memcpy(&header, p.recvBuffer.data(), sizeof(short));
-                        header = ntohs(header);
-                        cout << "TCP Header received: " << header << endl;
-
-                        unsigned long dataSize = 0;
-                        if      (header == uti::Header::SPELL)          dataSize = sizeof(uti::NetworkSpell);
-                        else if (header == uti::Header::MATCHMAKING)    dataSize = sizeof(uti::NetworkMatchmaking);
-                        else if (header == uti::Header::STATE)          dataSize = sizeof(uti::NetworkState);
-
-                        if (p.recvBuffer.size() >= dataSize)
-                        {
-                            // On gère les données reçu en fonction du header
-                            if      (header == uti::Header::SPELL)
-                            {
-                                uti::NetworkSpell ns;
-                                std::memcpy(&ns, p.recvBuffer.data(), sizeof(uti::NetworkSpell));
-
-                                ns.header   = ntohs(ns.header);
-                                ns.spellID  = ntohs(ns.spellID);
-
-                                std::cout << "SPELL RECEIVED: " << ns.header << " : " << ns.spellID << std::endl;
-                            }
-                            else if (header == uti::Header::MATCHMAKING)
-                            {
-                                std::cout << "Etat de matchmaking received:" << std::endl;
-
-                                p.inMatchmaking.store(!p.inMatchmaking.load(std::memory_order_relaxed), std::memory_order_relaxed);
-
-                                if (p.inMatchmaking.load(std::memory_order_relaxed))
-                                {
-                                    matchmaking.push_back(&p);
-                                    std::cout << "New player in matchmaking, now in -> " << matchmaking.size() << std::endl;
-                                }
-
-                                run_matchmaking();
-                            }
-                            else if (header == uti::Header::STATE)
-                            {
-                                uti::NetworkState nst;
-                                std::memcpy(&nst, p.recvBuffer.data(), sizeof(uti::NetworkState));
-
-                                nst.header = ntohs(nst.header);
-                                nst.inGame = ntohs(nst.inGame);
-
-                                p.inGame.store(nst.inGame, std::memory_order_relaxed);
-
-                                std::cout << "STATE RECEIVED: " << nst.header << " : " << nst.inGame << std::endl;
-                            }
-                            
-                            p.recvBuffer.erase(p.recvBuffer.begin(), p.recvBuffer.begin() + dataSize);
-                        }
-                        else {
-                            break; // We don't have enough data yet
-                        }
-                    }
-                }
-                else if (iResult == 0 || iResult == SOCKET_ERROR) 
-                {
-                    //if (!p.connected) continue;
-                    //cout << "ERROR: " << WSAGetLastError() << " : " << iResult << endl;
-
-                    p.resetPlayer();
-
-                    std::cout << "A client has been disconnected ID: " << p.getID() << std::endl;
-
+                    it = playersConnected.erase(it);
                     continue;
                 }
+
+                if (p->availableInPool.load(std::memory_order_relaxed)) continue;
+
+                SOCKET* clientSocket = p->getTCPSocket();
+                if (clientSocket && p->connected.load(std::memory_order_relaxed) && FD_ISSET(*clientSocket, &readfds)) //On check si le socket a reçu des données
+                {
+                    char buffer[recvbuflen];
+
+                    {
+                        std::shared_lock<std::shared_mutex> lock(p->mtx_socket);
+                        iResult = recv(*clientSocket, buffer, recvbuflen, 0);
+                    }
+
+                    if (iResult > 0) //Si on a reçu quelque chose
+                    {
+                        p->recvBuffer.insert(p->recvBuffer.end(), buffer, buffer + iResult);
+
+                        // Process received data
+                        while (p->recvBuffer.size() >= sizeof(short))
+                        {
+                            // Check if we have enough data for the header
+                            short header = 0;
+                            std::memcpy(&header, p->recvBuffer.data(), sizeof(short));
+                            header = ntohs(header);
+                            cout << "TCP Header received: " << header << endl;
+
+                            unsigned long dataSize = 0;
+                            if (header == uti::Header::SPELL)          dataSize = sizeof(uti::NetworkSpell);
+                            else if (header == uti::Header::MATCHMAKING)    dataSize = sizeof(uti::NetworkMatchmaking);
+                            else if (header == uti::Header::STATE)          dataSize = sizeof(uti::NetworkState);
+
+                            if (p->recvBuffer.size() >= dataSize)
+                            {
+                                // On gère les données reçu en fonction du header
+                                if (header == uti::Header::SPELL)
+                                {
+                                    uti::NetworkSpell ns;
+                                    std::memcpy(&ns, p->recvBuffer.data(), sizeof(uti::NetworkSpell));
+
+                                    ns.header = ntohs(ns.header);
+                                    ns.spellID = ntohs(ns.spellID);
+
+                                    std::cout << "SPELL RECEIVED: " << ns.header << " : " << ns.spellID << std::endl;
+                                }
+                                else if (header == uti::Header::MATCHMAKING)
+                                {
+                                    std::cout << "Etat de matchmaking received:" << std::endl;
+
+                                    p->inMatchmaking.store(!p->inMatchmaking.load(std::memory_order_relaxed), std::memory_order_relaxed);
+
+                                    if (p->inMatchmaking.load(std::memory_order_relaxed))
+                                    {
+                                        matchmaking.push_back(p);
+                                        std::cout << "New player in matchmaking, now in -> " << matchmaking.size() << std::endl;
+                                    }
+
+                                    run_matchmaking();
+                                }
+                                else if (header == uti::Header::STATE)
+                                {
+                                    uti::NetworkState nst;
+                                    std::memcpy(&nst, p->recvBuffer.data(), sizeof(uti::NetworkState));
+
+                                    nst.header = ntohs(nst.header);
+                                    nst.inGame = ntohs(nst.inGame);
+
+                                    p->inGame.store(nst.inGame, std::memory_order_relaxed);
+
+                                    std::cout << "STATE RECEIVED: " << nst.header << " : " << nst.inGame << std::endl;
+                                }
+
+                                p->recvBuffer.erase(p->recvBuffer.begin(), p->recvBuffer.begin() + dataSize);
+                            }
+                            else {
+                                break; // We don't have enough data yet
+                            }
+                        }
+                    }
+                    else if (iResult == 0 || iResult == SOCKET_ERROR)
+                    {
+                        //if (!p->connected) continue;
+                        //cout << "ERROR: " << WSAGetLastError() << " : " << iResult << endl;
+
+                        p->resetPlayer();
+
+                        it = playersConnected.erase(it);
+
+                        std::cout << "A client has been disconnected ID: " << p->getID() << std::endl;
+
+                        continue;
+                    }
+                }
+                ++it;
             }
         }
+
+        //for (auto it = playersPool.begin(); it != playersPool.end(); ++it)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
+        //{
+        //    Player& p = it->second;
+
+        //    if (p.availableInPool.load(std::memory_order_relaxed)) continue;
+
+        //    SOCKET* clientSocket = p.getTCPSocket();
+        //    if (clientSocket && p.connected.load(std::memory_order_relaxed) && FD_ISSET(*clientSocket, &readfds)) //On check si le socket a reçu des données
+        //    {
+        //        char buffer[recvbuflen];
+
+        //        {
+        //            std::shared_lock<std::shared_mutex> lock(p.mtx_socket);
+        //            iResult = recv(*clientSocket, buffer, recvbuflen, 0);
+        //        }
+
+        //        if (iResult > 0) //Si on a reçu quelque chose
+        //        {
+        //            p.recvBuffer.insert(p.recvBuffer.end(), buffer, buffer + iResult);
+
+        //            // Process received data
+        //            while (p.recvBuffer.size() >= sizeof(short)) 
+        //            {
+        //                // Check if we have enough data for the header
+        //                short header = 0;
+        //                std::memcpy(&header, p.recvBuffer.data(), sizeof(short));
+        //                header = ntohs(header);
+        //                cout << "TCP Header received: " << header << endl;
+
+        //                unsigned long dataSize = 0;
+        //                if      (header == uti::Header::SPELL)          dataSize = sizeof(uti::NetworkSpell);
+        //                else if (header == uti::Header::MATCHMAKING)    dataSize = sizeof(uti::NetworkMatchmaking);
+        //                else if (header == uti::Header::STATE)          dataSize = sizeof(uti::NetworkState);
+
+        //                if (p.recvBuffer.size() >= dataSize)
+        //                {
+        //                    // On gère les données reçu en fonction du header
+        //                    if      (header == uti::Header::SPELL)
+        //                    {
+        //                        uti::NetworkSpell ns;
+        //                        std::memcpy(&ns, p.recvBuffer.data(), sizeof(uti::NetworkSpell));
+
+        //                        ns.header   = ntohs(ns.header);
+        //                        ns.spellID  = ntohs(ns.spellID);
+
+        //                        std::cout << "SPELL RECEIVED: " << ns.header << " : " << ns.spellID << std::endl;
+        //                    }
+        //                    else if (header == uti::Header::MATCHMAKING)
+        //                    {
+        //                        std::cout << "Etat de matchmaking received:" << std::endl;
+
+        //                        p.inMatchmaking.store(!p.inMatchmaking.load(std::memory_order_relaxed), std::memory_order_relaxed);
+
+        //                        if (p.inMatchmaking.load(std::memory_order_relaxed))
+        //                        {
+        //                            matchmaking.push_back(&p);
+        //                            std::cout << "New player in matchmaking, now in -> " << matchmaking.size() << std::endl;
+        //                        }
+
+        //                        run_matchmaking();
+        //                    }
+        //                    else if (header == uti::Header::STATE)
+        //                    {
+        //                        uti::NetworkState nst;
+        //                        std::memcpy(&nst, p.recvBuffer.data(), sizeof(uti::NetworkState));
+
+        //                        nst.header = ntohs(nst.header);
+        //                        nst.inGame = ntohs(nst.inGame);
+
+        //                        p.inGame.store(nst.inGame, std::memory_order_relaxed);
+
+        //                        std::cout << "STATE RECEIVED: " << nst.header << " : " << nst.inGame << std::endl;
+        //                    }
+        //                    
+        //                    p.recvBuffer.erase(p.recvBuffer.begin(), p.recvBuffer.begin() + dataSize);
+        //                }
+        //                else {
+        //                    break; // We don't have enough data yet
+        //                }
+        //            }
+        //        }
+        //        else if (iResult == 0 || iResult == SOCKET_ERROR) 
+        //        {
+        //            //if (!p.connected) continue;
+        //            //cout << "ERROR: " << WSAGetLastError() << " : " << iResult << endl;
+
+        //            p.resetPlayer();
+
+        //            std::cout << "A client has been disconnected ID: " << p.getID() << std::endl;
+
+        //            continue;
+        //        }
+        //    }
+        //}
     }
 
     std::cout << "t_listen_clientsTCP finished..." << std::endl;

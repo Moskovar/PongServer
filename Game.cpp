@@ -207,9 +207,14 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         return;
     }
 
-    //std::cout << "Z: " << static_cast<Paddle*>(element)->z.load(std::memory_order_relaxed) << std::endl;
+    //std::cout << paddlePosition.x << " : " << paddlePosition.y << " : " << paddlePosition.z << std::endl;
 
     distance = distanceBetweenHitboxes(&ball, element);
+
+    //if(distance == 0) 
+        //std::cout << distance << std::endl;
+    if (distance == 0 && isPaddle) 
+        std::cout << "VERIF1: 0 && paddle" << std::endl;
 
 
     //Si la distance avec le joueur est > 0, alors on vérifie la distance avec les murs
@@ -227,6 +232,9 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             }
         }
     }
+
+    if (distance == 0 && isPaddle)
+        std::cout << "VERIF2: 0 && paddle" << std::endl;
     
     //Si la distance avec le dernier élément comparé est > 0, on déplace la balle, sinon on traite la collision en fonction de l'élément
     if (distance > 0 || ball.lastElementHit == element)//ou si le dernier élément touché != element actuel -> évite de bloquer la balle dans le mur si elle se déplace pas assez après un rebond
@@ -238,7 +246,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         if(isPaddle)
         {
             //std::cout << "COLLISION AVEC PADDLE" << std::endl;
-
+            if (distance == 0 && isPaddle)
+                std::cout << "VERIF3: 0 && paddle" << std::endl;
             //---- VelocityX ---//
             ball.turnback();
 

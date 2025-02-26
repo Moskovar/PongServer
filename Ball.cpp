@@ -80,6 +80,8 @@ void Ball::reset()
 	velocityX	= 0.0f;
 	velocityZ	= 0.0f;
 
+	lastElementHit = nullptr;
+
 	//moveSpeed	= 50.0f;
 }
 
