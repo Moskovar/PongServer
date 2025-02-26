@@ -59,8 +59,7 @@ class Game
 		u_int64 game_created_time = 0, round_start_time	= 0, ballSpeed_increase = 0;
 
 		//--- Gestion de la balle ---//
-		std::mutex mtx_ball;
-		Ball ball;
+		Ball ball;//utilisée uniquement dans le thread de logique de jeu, no need mutex ||-> on fait des reset ailleurs ?!
 
 		unsigned short gameID = 0, id = 0;
 		Player* p1 = nullptr, * p2 = nullptr, * lastWinner = nullptr;

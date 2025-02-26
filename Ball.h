@@ -30,7 +30,6 @@ class Ball : public Element
 		Element* lastElementHit = nullptr;
 
 	private:
-		std::mutex mtx_ball;
 		float velocityX = 1.0f, velocityZ = 0.0f;
 
 		short moveSpeed = 25;

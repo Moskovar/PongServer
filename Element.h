@@ -2,6 +2,7 @@
 #include <GLM/glm.hpp>
 #include "uti.h"
 #include <iostream>
+#include <atomic>
 
 class Element
 {
@@ -11,12 +12,14 @@ class Element
 
 		float getX() { return position.x; }
 		float getZ() { return position.z; }
+		virtual glm::vec3 getPosition() { return position; }
 
 		uti::OBB& getRHitbox() { return hitbox; }
 
-		void setZ(float z);
+		virtual void setZ(float z);
 		void setPosition(glm::vec3 position);
 		void updateModelMatrixFromPosition();
+		void updateModelMatrixFromPosition(glm::vec3 position);
 		void setMinMaxPoints(glm::vec3 minPoint, glm::vec3 maxPoint);
 
 	protected:

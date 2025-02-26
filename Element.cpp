@@ -9,7 +9,7 @@ Element::Element(glm::vec3 position)
 
 void Element::setZ(float z)
 {
-	//std::cout << "new Z : " << z << std::endl;
+	std::cout << "new Z : " << z << std::endl;
 	this->position.z = z;
 	updateModelMatrixFromPosition();
 
@@ -27,6 +27,15 @@ void Element::updateModelMatrixFromPosition()
 	this->modelMatrix[3].x = this->position.x;
 	this->modelMatrix[3].y = this->position.y;
 	this->modelMatrix[3].z = this->position.z;
+
+	calculateHitBox();
+}
+
+void Element::updateModelMatrixFromPosition(glm::vec3 position)
+{
+	this->modelMatrix[3].x = position.x;
+	this->modelMatrix[3].y = position.y;
+	this->modelMatrix[3].z = position.z;
 
 	calculateHitBox();
 }

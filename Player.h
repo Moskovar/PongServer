@@ -40,9 +40,6 @@ public:
 	uti::NetworkPaddle		getNp()			{ return { uti::Header::NP , gameID, id, (int)(paddle.getZ() * 1000)};  }//protéger le getZ
 
 	//--- Setters ---//
-	//Paddle protégé par mtx_paddle
-	void setZ(float z);
-	//Paddle protégé par mtx_paddle
 	void setAddr(sockaddr_in addr);//uniquement utilsé dans listen_udpSocket
 	sockaddr_in* getPAddr();
 	int& getAddrLen();
@@ -51,15 +48,15 @@ public:
 
 	//Paddle protégé par mtx_paddle
 	void update(uti::NetworkPaddle& np);
+	void updatePaddleModelMatrix(glm::vec3 position);
 
 	//--- communication ---//
 	SOCKET* getTCPSocket();
 	bool isSocketValid();
 	void closeSocket();
 	float getPaddleWidth() { return paddleWidth; }
-	Paddle  getPaddle()  { return paddle; }
+	//Paddle&  getPaddle()  { return paddle; }
 	Paddle* getPPaddle() { return &paddle; }
-
 
 	void leaveGame();
 
@@ -94,7 +91,6 @@ private:
 	//std::mutex mtx_states;
 
 	//--- Paddle ---//
-	std::mutex mtx_paddle;
 	Paddle paddle;
 	float paddleWidth = 10.2f;
 };

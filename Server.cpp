@@ -200,7 +200,7 @@ void Server::listen_clientsTCP()
     {
         //std::cout << "LISTEN" << std::endl;
         FD_ZERO(&readfds); // reset l'ensemble &readfds
-        std::unique_lock<std::mutex> lock(mtx_players);
+        //std::unique_lock<std::mutex> lock(mtx_players);
         //std::cout << players.size() << std::endl;
         for (auto it = players.begin(); it != players.end(); ++it)//créer une liste avec les joueurs connectés ?! ça évitera de parcourir les joueurs de la pool qui sont vides
         {            
@@ -219,7 +219,7 @@ void Server::listen_clientsTCP()
 
             //++it;
         }
-        lock.unlock();//unlock manuellement pour éviter les 100ms de pause après
+        //lock.unlock();//unlock manuellement pour éviter les 100ms de pause après
 
         // Vérifiez si le fd_set est vide
         if (readfds.fd_count == 0) 
@@ -238,7 +238,7 @@ void Server::listen_clientsTCP()
             continue;
         }
 
-        std::lock_guard<std::mutex> lock_players(mtx_players);
+        //std::lock_guard<std::mutex> lock_players(mtx_players);
         for (auto it = players.begin(); it != players.end(); ++it)//utiliser liste spéciale pour joueur connecter pour dodge les players pool vides
         {
             Player& p = it->second;
@@ -355,7 +355,8 @@ void Server::listen_clientsUDP()
         timeout.tv_usec = 0;
 
         int iResult = select(0, &readfds, NULL, NULL, &timeout);//Attend que l'un des sockets dans readfds soit prêt pour la lecture (ou jusqu'à ce que le délai d'attente expire)
-        if (iResult == SOCKET_ERROR) {
+        if (iResult == SOCKET_ERROR) 
+        {
             std::cerr << "Select failed: " << WSAGetLastError() << std::endl;
             continue;
         }
@@ -384,6 +385,7 @@ void Server::listen_clientsUDP()
             np.gameID = htons(np.gameID);
             np.id = htons(np.id);
             np.z = static_cast<int32_t>(ntohl(np.z));
+
             //if(np.id == 0) std::cout << "Received: " << np.gameID << " : " << np.id << " : " << (float)(np.z / 1000.0f) << std::endl;
 
             //std::cout << "DATA: " << players[np.id].availableInPool << " : " << games[np.gameID].availableInPool << std::endl;
@@ -392,6 +394,8 @@ void Server::listen_clientsUDP()
             {
                 //std::cout << "MSG sent to players in the game: " << np.gameID << std::endl;
 
+                //players[np.id].getPPaddle()->z.store((float)(np.z / 1000.0f), std::memory_order_seq_cst);
+                //players[np.id].getPPaddle()->setZ((float)(np.z / 1000.0f));//met à jour le float z du paddle protégé par le mutex
                 players[np.id].setAddr(clientAddr);
                 players[np.id].update(np);
 
@@ -420,9 +424,9 @@ void Server::run_games()
         if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //17 ~= 60fps
             last_timestamp_send_ball = uti::getCurrentTimestampMs();
 
-        std::lock_guard<std::mutex> lock_players(mtx_players);
+        //std::lock_guard<std::mutex> lock_players(mtx_players);
         //std::lock_guard<std::mutex> lock_games(mtx_games);
-        for (auto it = games.begin(); it != games.end(); ++it)
+        for (auto it = games.begin(); it != games.end(); ++it)//liste de game en cours pour pas tourner sur les useless
         {
             Game& game = it->second;
 

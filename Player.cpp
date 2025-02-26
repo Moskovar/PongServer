@@ -51,7 +51,8 @@ void Player::resetPlayer()
 
     resetStates();
 
-    std::unique_lock<std::shared_mutex> lock(mtx_udp);;
+    std::unique_lock<std::shared_mutex> lock(mtx_udp);
+    addr    = {};
     addrLen = -1;
 
     cout << "Player " << getID() << " has been reset !\n" << endl;
@@ -93,8 +94,7 @@ void Player::setSide(short side)
         //std::lock_guard<std::mutex> lock_states(mtx_states);
         this->side = side;
     }
-
-    std::lock_guard<std::mutex> lock_paddle(mtx_paddle);
+    //fait avant le début de la partie ? si oui, pas besoin de mtx ?!
     if      (side == -1) paddle.setPosition(glm::vec3(-70.0f, 0.0f, 0.0f));
     else if (side ==  1) paddle.setPosition(glm::vec3( 70.0f, 0.0f, 0.0f));
     //else { std::cout << "La paddle existe deja..." << std::endl; }
@@ -118,8 +118,12 @@ void Player::resetStates()
 
 void Player::update(uti::NetworkPaddle& np)
 {
-    std::lock_guard<std::mutex> lock(mtx_paddle);
     this->paddle.setZ((float)(np.z / 1000.0f));
+}
+
+void Player::updatePaddleModelMatrix(glm::vec3 position)
+{
+    paddle.updateModelMatrixFromPosition(position);
 }
 
 SOCKET* Player::getTCPSocket()
@@ -140,12 +144,6 @@ void Player::closeSocket()
     closesocket(*tcpSocket);
     delete tcpSocket;
     tcpSocket = nullptr;
-}
-
-void Player::setZ(float z)
-{
-    std::lock_guard<std::mutex> lock(mtx_paddle);
-    paddle.setZ(z);
 }
 
 void Player::setAddr(sockaddr_in addr)

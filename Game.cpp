@@ -222,6 +222,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         increaseBallSpeed();
     }
 
+    glm::vec3 paddlePosition;
+
     float velocityX = ball.getVelocityX(),
           ballX     = ball.getX();
 
@@ -231,7 +233,11 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
 
         if (!element) return;
 
-        if (ballX < element->getX() - 10)
+        paddlePosition = element->getPosition();
+        //Mise à jour de la matrice modèle des paddles (le thread udp met à jour la position mais pas la matrice pour que le mutex ne bloque que la position)
+        p1->updatePaddleModelMatrix(paddlePosition);
+
+        if (ballX < paddlePosition.x - 10)
         {
             std::cout << "OUT!" << std::endl;
             resetRound();
@@ -244,7 +250,11 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
 
         if (!element) return;
 
-        if (ballX > element->getX() + 10)
+        paddlePosition = element->getPosition();
+        //Mise à jour de la matrice modèle des paddles (le thread udp met à jour la position mais pas la matrice pour que le mutex ne bloque que la position)
+        p2->updatePaddleModelMatrix(paddlePosition);
+
+        if (ballX > paddlePosition.x + 10)
         {
             std::cout << "OUT!" << std::endl;
             resetRound();
@@ -256,6 +266,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         std::cout << "Paddle Element Nullptr!" << std::endl;
         return;
     }
+
+    //std::cout << "Z: " << static_cast<Paddle*>(element)->z.load(std::memory_order_relaxed) << std::endl;
 
     distance = distanceBetweenHitboxes(&ball, element);
 
@@ -291,7 +303,7 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
             ball.turnback();
 
             //--- VelocityZ ---//
-            float velocityZ = (ball.getZ() - element->getZ()) / (static_cast<Paddle*>(element)->width / 2);
+            float velocityZ = (ball.getZ() - paddlePosition.z) / (static_cast<Paddle*>(element)->width / 2);
 
 
             ball.setVelocityZ(velocityZ);
