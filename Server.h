@@ -10,6 +10,8 @@
 #include "Player.h"
 #include "Game.h"
 #include "Wall.h"
+#include <chrono>
+#include <cstdint>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -17,6 +19,7 @@ using namespace std;
 
 #define MAX_PLAYER_NUMBER	1000
 #define MAX_GAME_NUMBER		(MAX_PLAYER_NUMBER/2)
+#define SEND_BALL_TIMER		30000//ms
 
 class Server
 {
@@ -24,15 +27,17 @@ class Server
 		Server();
 		~Server();
 
-		void accept_connections();
+		uint32_t	getElapsedTimeMs();
+		void		accept_connections();
 
 		std::vector<Wall> walls;
+		uint32_t start_time;
 
 	private:
 		bool run = true, isDeleting = false;
 		WSADATA wsaData;
 
-		SOCKET connectionSocket = INVALID_SOCKET;//socket pour recevoir et accepter les connexions des clients
+		SOCKET connectionSocket = INVALID_SOCKET; //socket pour recevoir et accepter les connexions des clients
 		SOCKET udpSocket		= INVALID_SOCKET;//socket pour communiquer en UDP
 		std::map<int, Player>		playersPool;//liste dans laquelle sont placés les nouveaux joueurs dont la connexion a été acceptée -> accès rapide
 		std::vector<Player*>		matchmaking;

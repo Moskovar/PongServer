@@ -32,7 +32,7 @@ class Ball : public Element
 	private:
 		float velocityX = 1.0f, velocityZ = 0.0f;
 
-		short moveSpeed = 25;
+		short moveSpeed = 50;
 
 		uint32_t timestamp = 0;
 };

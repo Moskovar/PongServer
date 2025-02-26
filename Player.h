@@ -61,12 +61,12 @@ public:
 	void leaveGame();
 
 	//--- Envoie TCP ---//
-	void sendVersionTCP(int version);
+	void sendVersionTCP(int version, uint32_t start_time);
 	void sendNPSTCP(uti::NetworkPaddleStart ne);
 	void sendNBALLTCP(uti::NetworkBall nball);
 
 	void send_NPUDP(SOCKET& udpSocket, Player* pData);
-	void send_BALLUDP(SOCKET udpSocket, Ball* ball);
+	void send_BALLUDP(SOCKET udpSocket, Ball* ball, uint32_t elapsedTime);
 
 	//--- Gestion des états ---//
 	std::atomic<bool> availableInPool{ true },//si l'objet est utilisé pour un joueur dans la pool

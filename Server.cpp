@@ -74,13 +74,11 @@ Server::Server()//gérer les erreurs avec des exceptions
     walls.push_back(Wall(glm::vec3(0.0f, 0.0f, -40.5f)));
     walls.push_back(Wall(glm::vec3(0.0f, 0.0f,  40.5f)));
 
-    //for (int i = 1; i <= MAX_PLAYER_NUMBER; ++i)//attribuer les ID aux joueurs de la pool de joueurs
-    //{
-    //    players.emplace(i, Player(i));
-    //}
-
     //t_check_connections = new thread(&Server::check_connections, this);
     //cout << "- Check connections thread runs !" << endl;
+
+
+    start_time = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 
     t_listen_clientsTCP = new thread(&Server::listen_clientsTCP, this);
     cout << "- Listen TCP thread runs !" << endl;
@@ -147,6 +145,23 @@ Server::~Server()
     cout << "Le serveur est complétement nettoyé" << endl;
 }
 
+uint32_t Server::getElapsedTimeMs()
+{
+    // Obtenir le temps actuel en millisecondes depuis l'époque UNIX
+    uint32_t current_time = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
+
+    // Calculer le temps écoulé depuis start_time
+    if (current_time >= start_time) 
+    {
+        return current_time - start_time;
+    }
+    else 
+    {
+        // Si current_time est inférieur à start_time (cas improbable mais possible si il y a un dépassement -> 46j et quelques)
+        return 0;
+    }
+}
+
 //--- Accepte les connexions du joueur sur le serveur ---//
 void Server::accept_connections()
 {
@@ -184,9 +199,9 @@ void Server::accept_connections()
                 std::lock_guard<std::mutex> lock(mtx_players);
                 playersConnected.insert(&playersPool[id]);
             }
-            playersPool[id].sendVersionTCP(1010);//on envoie la version au joueur
+            playersPool[id].sendVersionTCP(1010, start_time);//on envoie la version au joueur
 
-            cout << "Connection succeed !" << endl << playersPool.size() << " clients " << id << " connected with ID " << id << " ! " << endl;
+            cout << "Connection succeed !" << endl << playersPool.size() << " clients " << id << " connected with ID " << id << " ! EplapsedTime: " << getElapsedTimeMs() << endl;
         }
         else std::cerr << "Connexion échoué -> erreur: " << WSAGetLastError() << std::endl;
         std::cout << "Waiting for new connection..." << std::endl;
@@ -556,6 +571,7 @@ void Server::run_games()
     using Clock = std::chrono::high_resolution_clock;
     auto lastTime = Clock::now();
     last_timestamp_send_ball = uti::getCurrentTimestampMs();
+    uint32_t elapsedTime;
 
     while (run)
     {
@@ -564,90 +580,54 @@ void Server::run_games()
         auto currentTime = Clock::now();
         std::chrono::duration<float> deltaTime = currentTime - lastTime;
         lastTime = currentTime;
+        elapsedTime = getElapsedTimeMs();
         //std::cout << deltaTime.count() << std::endl;
 
-        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //17 ~= 60fps ||--> si une boucle tourne en 300ms alors on est fcked up? 300 > 17 ce truc sert à rien
+        if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= SEND_BALL_TIMER) //17 ~= 60fps
             last_timestamp_send_ball = uti::getCurrentTimestampMs();       //A voir après création d'une liste dédiée aux games actives
 
-        //for (auto it = gamesPool.begin(); it != gamesPool.end(); ++it)//liste de game en cours pour pas tourner sur les useless
-        //{
-        //    Game& game = it->second;
-
-        //    bool isGameAvailableInPool = game.availableInPool.load(std::memory_order_relaxed);
-
-        //    if (isGameAvailableInPool) continue;
-
-        //    //std::cout << "P1 DC: "  << !it->second->getP1()->connected << std::endl;
-        //    //std::cout << "P2 DC: "  << !it->second->getP2()->connected << std::endl;
-        //    //std::cout << "ALL DC: " <<  it->second->allPlayersDisconnected() << std::endl;
-
-        //    if (!isGameAvailableInPool && (game.allPlayersDisconnected() || game.allPlayersLeftGame()))
-        //    {
-        //        Player* p1 = game.getP1();
-        //        if (p1) p1->inGame = false;
-
-        //        Player* p2 = game.getP2();
-        //        if (p2) p2->inGame = false;
-
-        //        game.reset();
-
-        //        std::cout << "A game has been finished from all players disconnected ..." << std::endl;
-
-        //        continue;
-        //    }
-
-        //    bool roundStarted = game.roundStarted.load(std::memory_order_relaxed);
-
-        //    if (roundStarted)//Si la game a démarré, on la joue
-        //    {
-        //        game.run(udpSocket, deltaTime.count());
-        //        if(uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
-        //            game.sendBallToPlayersUDP(udpSocket);
-        //    }
-        //    else if (!roundStarted && uti::getCurrentTimestamp() - game.round_start_time >= 3)//si la game n'a pas démarré
-        //    {
-        //        game.startRound(udpSocket);
-        //    }
-        //}
-
-        for (auto it = gamesPool.begin(); it != gamesPool.end(); ++it)//liste de game en cours pour pas tourner sur les useless
         {
-            Game& game = it->second;
-
-            bool isGameAvailableInPool = game.availableInPool.load(std::memory_order_relaxed);
-
-            if (isGameAvailableInPool) continue;
-
-            //std::cout << "P1 DC: "  << !it->second->getP1()->connected << std::endl;
-            //std::cout << "P2 DC: "  << !it->second->getP2()->connected << std::endl;
-            //std::cout << "ALL DC: " <<  it->second->allPlayersDisconnected() << std::endl;
-
-            if (!isGameAvailableInPool && (game.allPlayersDisconnected() || game.allPlayersLeftGame()))
+            std::lock_guard<std::mutex> lock(mtx_games);
+            for (auto it = gamesLaunched.begin(); it != gamesLaunched.end();)//liste de game en cours pour pas tourner sur les useless
             {
-                Player* p1 = game.getP1();
-                if (p1) p1->inGame = false;
+                Game* game = *it;
 
-                Player* p2 = game.getP2();
-                if (p2) p2->inGame = false;
+                bool isGameAvailableInPool = game->availableInPool.load(std::memory_order_relaxed);
 
-                game.reset();
+                //if (isGameAvailableInPool) continue;
 
-                std::cout << "A game has been finished from all players disconnected ..." << std::endl;
+                if (!isGameAvailableInPool && (game->allPlayersDisconnected() || game->allPlayersLeftGame()))
+                {
+                    Player* p1 = game->getP1();
+                    if (p1) p1->inGame = false;
 
-                continue;
-            }
+                    Player* p2 = game->getP2();
+                    if (p2) p2->inGame = false;
 
-            bool roundStarted = game.roundStarted.load(std::memory_order_relaxed);
+                    game->reset();
 
-            if (roundStarted)//Si la game a démarré, on la joue
-            {
-                game.run(udpSocket, deltaTime.count());
-                if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= 17) //(1s) 1000ms / 60(fps) = 16.66ms
-                    game.sendBallToPlayersUDP(udpSocket);
-            }
-            else if (!roundStarted && uti::getCurrentTimestamp() - game.round_start_time >= 3)//si la game n'a pas démarré
-            {
-                game.startRound(udpSocket);
+                    it = gamesLaunched.erase(it);
+
+                    std::cout << "A game has been finished from all players disconnected ..." << std::endl;
+
+                    continue;
+                }
+
+                bool roundStarted = game->roundStarted.load(std::memory_order_relaxed);
+
+                if (roundStarted)//Si la game a démarré, on la joue
+                { 
+                    game->run(udpSocket, deltaTime.count(), elapsedTime);
+                    //if (uti::getCurrentTimestampMs() - last_timestamp_send_ball >= SEND_BALL_TIMER) //(1s) 1000ms / 60(fps) = 16.66ms
+                    //    game->sendBallToPlayersUDP(udpSocket, elapsedTime);
+                    //else std::cout << "PAS SEND BALL" << std::endl;
+                }
+                else if (!roundStarted && uti::getCurrentTimestamp() - game->round_start_time >= 3)//si la game n'a pas démarré
+                {
+                    game->startRound(udpSocket, elapsedTime);
+                }
+
+                ++it;
             }
         }
 
@@ -657,60 +637,55 @@ void Server::run_games()
 
 void Server::run_matchmaking()
 {
-    //while(run)
-    //{
-        //std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-        matchmaking.erase(
-            std::remove_if(matchmaking.begin(), matchmaking.end(), [](Player* p) 
-                { 
-                    bool remove = !p || p->availableInPool.load(std::memory_order_relaxed) || !p->connected.load(std::memory_order_relaxed) || p->inGame.load(std::memory_order_relaxed) || !p->inMatchmaking.load(std::memory_order_relaxed);
-
-                    if (remove) 
-                    {
-                        std::cout << "1 player has been removed from matchmaking" << std::endl;
-                        if(p) p->inMatchmaking.store(false, std::memory_order_relaxed);
-                    }
-
-                    return remove;
-                }),
-            matchmaking.end()
-        );
-
-        //std::cout << "Matchmaking size: " << matchmaking.size() << std::endl;
-
-        if (matchmaking.size() < 2) return;//s'il y a moins de 2 joueurs dans le matchmaking on skip
-
-        int gameID = -1;
-
-        Player* p1 = matchmaking[0];
-        Player* p2 = matchmaking[1];
-
-        for (int i = 0; i < MAX_GAME_NUMBER; i++)
-        {
-            if (gamesPool[i].availableInPool.load(std::memory_order_relaxed)) //si on trouve un trou, on met id à i et on sort de la boucle
+    matchmaking.erase(
+        std::remove_if(matchmaking.begin(), matchmaking.end(), [](Player* p) 
             { 
-                gameID = i; 
-                break; 
-            }
+                bool remove = !p || p->availableInPool.load(std::memory_order_relaxed) || !p->connected.load(std::memory_order_relaxed) || p->inGame.load(std::memory_order_relaxed) || !p->inMatchmaking.load(std::memory_order_relaxed);
+
+                if (remove) 
+                {
+                    std::cout << "1 player has been removed from matchmaking" << std::endl;
+                    if(p) p->inMatchmaking.store(false, std::memory_order_relaxed);
+                }
+
+                return remove;
+            }),
+        matchmaking.end()
+    );
+
+    if (matchmaking.size() < 2) return;//s'il y a moins de 2 joueurs dans le matchmaking on skip
+
+    int gameID = -1;
+
+    Player* p1 = matchmaking[0];
+    Player* p2 = matchmaking[1];
+
+    for (int i = 0; i < MAX_GAME_NUMBER; i++)
+    {
+        if (gamesPool[i].availableInPool.load(std::memory_order_relaxed)) //si on trouve un trou, on met id à i et on sort de la boucle
+        { 
+            gameID = i; 
+            break; 
         }
+    }
 
-        if (gameID == -1) return;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
+    if (gameID == -1) return;//Si gameID == -1, pas d'ID de game a été trouvé, on recommence la boucle
 
 
-        if (gamesPool[gameID].set(gameID, p1, p2, &walls))
+    if (gamesPool[gameID].set(gameID, p1, p2, &walls))
+    {
         {
+            std::lock_guard<std::mutex> lock(mtx_games);
             gamesLaunched.insert(&gamesPool[gameID]);
-
-            matchmaking.erase(matchmaking.begin());//on enlève le premier élément
-            matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
-
-            std::cout << "Game is starting..." << std::endl;
-            //std::cout << "availableInPool" << " -> " << games[gameID].availableInPool << std::endl;
         }
-        else
-        {
-            std::cout << "Can't start the game, P1 or P2 nullptr!" << std::endl;
-        }
-    //}
+
+        matchmaking.erase(matchmaking.begin());//on enlève le premier élément
+        matchmaking.erase(matchmaking.begin());//on enlève le premier élément, qui était le second avant d'avoir enlever l'élément précédent
+
+        std::cout << "Game is starting..." << std::endl;
+    }
+    else
+    {
+        std::cout << "Can't start the game, P1 or P2 nullptr!" << std::endl;
+    }
 }

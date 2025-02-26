@@ -8,6 +8,9 @@
 #include <cmath>
 #include <array>
 
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
 using namespace std;
 
 namespace uti {
@@ -38,6 +41,7 @@ namespace uti {
 	{
 		short header = Header::VERSION;
 		int version = 0;
+		uint32_t start_time;
 	};
 #pragma pack(pop)
 
@@ -142,4 +146,6 @@ namespace uti {
 			//std::cout << "mp: " << minPoint.x << " : " << minPoint.y << " : " << minPoint.z << std::endl;
 		}
 	};
+
+	uint32_t getElapsedTimeMs(uint32_t start_time);
 }

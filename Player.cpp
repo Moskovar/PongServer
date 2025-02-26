@@ -173,15 +173,16 @@ void Player::leaveGame()
     inMatchmaking   = false;
 }
 
-void Player::sendVersionTCP(int version)
+void Player::sendVersionTCP(int version, uint32_t start_time)
 {
     if (!connected.load(std::memory_order_relaxed)) return;//si le joueur n'est pas connecté, on sort
 
     uti::NetworkVersion nv;
 
     // Convertir les valeurs en big-endian avant l'envoi
-    nv.header   = htons(nv.header);
-    nv.version  = htonl(version);
+    nv.header       = htons(nv.header);
+    nv.version      = htonl(version);
+    nv.start_time   = htonl(start_time);
 
     // Envoi sécurisé des données
     int totalSent = 0;
@@ -355,7 +356,7 @@ void Player::send_NPUDP(SOCKET& udpSocket, Player* pData)
     //}
 }
 
-void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
+void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball, uint32_t elapsedTime)
 {
     if (!connected.load(std::memory_order_relaxed) || !inGame.load(std::memory_order_relaxed)) return;
 
@@ -372,6 +373,7 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
     }
 
     uti::NetworkBall nb = ball->getNball();
+    std::cout << "BALL TO SEND: " << elapsedTime << std::endl;
 
     nb.header       = htons(nb.header);
     nb.x            = htonl(nb.x);
@@ -379,9 +381,9 @@ void Player::send_BALLUDP(SOCKET udpSocket, Ball* ball)
     nb.velocityX    = htonl(nb.velocityX);
     nb.velocityZ    = htonl(nb.velocityZ);
     nb.speed        = htons(nb.speed);
-    nb.timestamp    = htonl(ball->getTimestamp());
+    nb.timestamp    = htonl(elapsedTime);
 
-    //std::cout << "BALL SENT: " << ntohl(nb.timestamp) << std::endl;
+    std::cout << "BALL SENT: " << ntohl(nb.timestamp) << std::endl;
 
     //std::cout << addrLen << std::endl;
 

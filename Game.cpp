@@ -18,7 +18,7 @@ void Game::reset()
     lastWinner  = nullptr;
 
     //on reset la position de la balle dans le set, au moment d'envoyer les données de positions de la balle aux joueurs
-    ball.setMoveSpeed(25);
+    ball.setMoveSpeed(50);
     
     roundStarted.store(false, std::memory_order_relaxed);
     availableInPool.store(true, std::memory_order_relaxed);
@@ -120,19 +120,19 @@ void Game::sendBallToPlayersTCP()
     p2->sendNBALLTCP(nball);
 }
 
-void Game::sendBallToPlayersUDP(SOCKET& udpSocket)
+void Game::sendBallToPlayersUDP(SOCKET& udpSocket, uint32_t elapsedTime)
 {
-    p1->send_BALLUDP(udpSocket, &ball);
-    p2->send_BALLUDP(udpSocket, &ball);
+    p1->send_BALLUDP(udpSocket, &ball, elapsedTime);
+    p2->send_BALLUDP(udpSocket, &ball, elapsedTime);
 }
 
-void Game::startRound(SOCKET& udpSocket)
+void Game::startRound(SOCKET& udpSocket, uint32_t elapsedTime)
 {
     ball.start((lastWinner) ? -lastWinner->getSide() : 0);
 
     roundStarted.store(true, std::memory_order_relaxed);
     round_start_time = uti::getCurrentTimestamp();
-    sendBallToPlayersUDP(udpSocket);
+    sendBallToPlayersUDP(udpSocket, elapsedTime);
 }
 
 void Game::resetRound()
@@ -149,7 +149,7 @@ void Game::increaseBallSpeed()
     //    sendBallSpeedTCP();
 }
 
-void Game::run(SOCKET& udpSocket, float deltaTime)
+void Game::run(SOCKET& udpSocket, float deltaTime, uint32_t elapsedTime)
 {
     float distance;
     Element* element = nullptr;
@@ -213,8 +213,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
 
     //if(distance == 0) 
         //std::cout << distance << std::endl;
-    if (distance == 0 && isPaddle) 
-        std::cout << "VERIF1: 0 && paddle" << std::endl;
+    //if (distance == 0 && isPaddle) 
+    //    std::cout << "VERIF1: 0 && paddle" << std::endl;
 
 
     //Si la distance avec le joueur est > 0, alors on vérifie la distance avec les murs
@@ -233,8 +233,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         }
     }
 
-    if (distance == 0 && isPaddle)
-        std::cout << "VERIF2: 0 && paddle" << std::endl;
+    //if (distance == 0 && isPaddle)
+    //    std::cout << "VERIF2: 0 && paddle" << std::endl;
     
     //Si la distance avec le dernier élément comparé est > 0, on déplace la balle, sinon on traite la collision en fonction de l'élément
     if (distance > 0 || ball.lastElementHit == element)//ou si le dernier élément touché != element actuel -> évite de bloquer la balle dans le mur si elle se déplace pas assez après un rebond
@@ -246,8 +246,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         if(isPaddle)
         {
             //std::cout << "COLLISION AVEC PADDLE" << std::endl;
-            if (distance == 0 && isPaddle)
-                std::cout << "VERIF3: 0 && paddle" << std::endl;
+            //if (distance == 0 && isPaddle)
+            //    std::cout << "VERIF3: 0 && paddle" << std::endl;
             //---- VelocityX ---//
             ball.turnback();
 
@@ -263,6 +263,8 @@ void Game::run(SOCKET& udpSocket, float deltaTime)
         }
 
         ball.lastElementHit = element;
+
+        sendBallToPlayersUDP(udpSocket, elapsedTime);
     }
 }
 

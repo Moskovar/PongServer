@@ -22,11 +22,11 @@ class Game
 
 		void resetBall();
 		void sendBallToPlayersTCP();
-		void sendBallToPlayersUDP(SOCKET& udpSocket);
-		void startRound(SOCKET& udpSocket);
+		void sendBallToPlayersUDP(SOCKET& udpSocket, uint32_t elapsedTime);
+		void startRound(SOCKET& udpSocket, uint32_t elapsedTime);
 		void resetRound();
 		void increaseBallSpeed();
-		void run(SOCKET& udpSocket, float deltaTime);
+		void run(SOCKET& udpSocket, float deltaTime, uint32_t elapsedTime);
 
 		SOCKET* udpSocket = nullptr;
 		//--- Gestion des états et du temps ---//
